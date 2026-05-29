@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "WebSearch",
+      "WebFetch(domain:www.cloudwego.io)",
+      "WebFetch(domain:github.com)"
+    ]
+  }
+}
