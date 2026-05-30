@@ -71,3 +71,14 @@ func (r *BriefingRepo) UpdateStatus(id uint, status string, errMsg string) error
 	return r.db.Model(&models.Briefing{}).Where("id = ?", id).
 		Updates(map[string]any{"status": status, "error_message": errMsg}).Error
 }
+
+// UpdateContent 更新简报完整内容（用于异步生成后填充占位记录）
+func (r *BriefingRepo) UpdateContent(id uint, title, markdown string, articleCount int) error {
+	return r.db.Model(&models.Briefing{}).Where("id = ?", id).
+		Updates(map[string]any{
+			"title":            title,
+			"content_markdown": markdown,
+			"article_count":    articleCount,
+			"status":           "completed",
+		}).Error
+}
