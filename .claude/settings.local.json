@@ -17,7 +17,12 @@
       "Bash(curl -s http://localhost:5173/src/index.css)",
       "Bash(go run:*)",
       "Bash(curl -s http://localhost:8080/api/v1/health)",
-      "Bash(python3 -m json.tool)"
+      "Bash(python3 -m json.tool)",
+      "Bash(curl -s -X POST http://localhost:8080/api/v1/sources -H 'Content-Type: application/json' -d '{\"name\":\"IT之家\",\"source_type\":\"rss\",\"url\":\"https://www.ithome.com/rss/\"}')",
+      "Bash(curl -s -X POST http://localhost:8080/api/v1/fetch)",
+      "Bash(curl -s http://localhost:8080/api/v1/articles?limit=3)",
+      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); [print\\(a['id'], a['title'][:60]\\) for a in d['data']['items']]\")",
+      "Bash(curl -s http://localhost:8080/api/v1/articles?limit=2)"
     ]
   }
 }
