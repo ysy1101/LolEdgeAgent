@@ -14,7 +14,10 @@
       "Bash(curl -s http://localhost:5173/src/main.tsx)",
       "Bash(curl -s http://localhost:5173/src/routes/index.tsx)",
       "Bash(curl -s http://localhost:5173/src/layouts/DashboardLayout.tsx)",
-      "Bash(curl -s http://localhost:5173/src/index.css)"
+      "Bash(curl -s http://localhost:5173/src/index.css)",
+      "Bash(go run:*)",
+      "Bash(curl -s http://localhost:8080/api/v1/health)",
+      "Bash(python3 -m json.tool)"
     ]
   }
 }

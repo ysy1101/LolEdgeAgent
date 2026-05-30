@@ -12,19 +12,37 @@
 
 | 表名 | 说明 | 关键索引 |
 |------|------|---------|
+| users | 用户账号 | username 唯一 |
 | sources | 内容源配置 | - |
 | articles | 抓取的文章 | source_id, dedup_hash, relevance_score |
-| briefings | 生成的简报 | generated_at, status |
+| briefings | 生成的简报 | user_id, generated_at, status |
 | briefing_articles | 简报-文章关联 | 联合主键 |
-| bookmarks | 文章收藏 | article_id, created_at |
-| preferences | 用户偏好（单例） | id=1 唯一 |
+| bookmarks | 文章收藏 | user_id + article_id 唯一 |
+| preferences | 用户偏好 | user_id 唯一 |
 | fetch_logs | 抓取日志 | source_id, started_at |
 
 ---
 
 ## 详细表设计
 
-### 1. sources — 内容源配置
+### 1. users — 用户账号
+
+```sql
+CREATE TABLE users (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    username        TEXT    NOT NULL UNIQUE,              -- 用户名
+    email           TEXT    NOT NULL UNIQUE,              -- 邮箱
+    password_hash   TEXT    NOT NULL,                     -- bcrypt 哈希
+    created_at      TEXT    NOT NULL DEFAULT (datetime('now')),
+    updated_at      TEXT    NOT NULL DEFAULT (datetime('now'))
+);
+```
+
+**说明：** MVP 阶段可以只有一个默认用户，后期扩展多用户时通过 `user_id` 关联各表数据隔离。
+
+---
+
+### 2. sources — 内容源配置
 
 ```sql
 CREATE TABLE sources (
@@ -49,7 +67,7 @@ CREATE TABLE sources (
 
 ---
 
-### 2. articles — 抓取的文章
+### 3. articles — 抓取的文章
 
 ```sql
 CREATE TABLE articles (
@@ -88,7 +106,7 @@ CREATE INDEX idx_articles_relevance    ON articles(relevance_score DESC);
 
 ---
 
-### 3. briefings — 简报
+### 4. briefings — 简报
 
 ```sql
 CREATE TABLE briefings (
@@ -113,7 +131,7 @@ pending → generating → completed
 
 ---
 
-### 4. briefing_articles — 简报-文章关联
+### 5. briefing_articles — 简报-文章关联
 
 ```sql
 CREATE TABLE briefing_articles (
@@ -131,7 +149,7 @@ CREATE TABLE briefing_articles (
 
 ---
 
-### 5. bookmarks — 文章收藏
+### 6. bookmarks — 文章收藏
 
 ```sql
 CREATE TABLE bookmarks (
@@ -159,11 +177,12 @@ ORDER BY b.created_at DESC;
 
 ---
 
-### 7. preferences — 用户偏好（单例表）
+### 7. preferences — 用户偏好
 
 ```sql
 CREATE TABLE preferences (
-    id                      INTEGER PRIMARY KEY CHECK (id = 1),  -- 强制单例
+    id                      INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id                 INTEGER NOT NULL UNIQUE,             -- 关联 users.id，每用户一配置
     keywords                TEXT    NOT NULL DEFAULT '[]',       -- 关注关键词 JSON 数组
     excluded_keywords       TEXT    NOT NULL DEFAULT '[]',       -- 排除关键词 JSON 数组
     max_articles_per_source INTEGER NOT NULL DEFAULT 20,         -- 每个源最大抓取数
@@ -173,11 +192,10 @@ CREATE TABLE preferences (
     llm_api_key             TEXT    NOT NULL DEFAULT '',         -- API Key
     llm_base_url            TEXT    NOT NULL DEFAULT '',         -- 自定义 API 地址
     briefing_schedule       TEXT    NOT NULL DEFAULT '',         -- Cron 表达式，空=手动
-    updated_at              TEXT    NOT NULL DEFAULT (datetime('now'))
-);
+    updated_at              TEXT    NOT NULL DEFAULT (datetime('now')),
 
--- 确保只有一行
-INSERT OR IGNORE INTO preferences (id) VALUES (1);
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
 ```
 
 **keywords 示例：**
@@ -211,32 +229,37 @@ CREATE INDEX idx_fetch_logs_source ON fetch_logs(source_id, started_at DESC);
 
 ```
 ┌──────────┐       ┌──────────────┐       ┌──────────┐
-│  sources │       │   articles   │       │ briefings│
+│  users   │       │   articles   │       │ briefings│
 │──────────│       │──────────────│       │──────────│
-│ id       │──1:N──│ source_id   │       │ id       │
-│ name     │       │ external_id │       │ title    │
-│ type     │       │ title       │──M:N──│ markdown │
-│ url      │       │ url         │   │   │ status   │
-│ enabled  │       │ dedup_hash  │   │   └──────────┘
-│ config   │       │ score       │   │        │
-└──────────┘       │ summary     │   │   briefing_articles
-     │             └──────────────┘   │   ─────────────
-     │                  │ 1:1         │   briefing_id(FK)
-     │             ┌──────────────┐   └───article_id(FK)
-     │             │  bookmarks   │       rank_position
-     │             │──────────────│
-     │             │ article_id  │       ┌─────────────┐
-     └──1:N────────│ note        │       │ preferences │
-                   └──────────────┘       │─────────────│
-                                          │ id=1 (单例) │
-                   ┌──────────────┐       │ keywords    │
-                   │  fetch_logs  │       │ llm_*       │
-                   │──────────────│       │ schedule    │
-                   │ source_id   │       └─────────────┘
-                   │ status      │
-                   │ count       │
-                   │ error       │
-                   └──────────────┘
+│ id       │──1:1──│ source_id   │       │ id       │
+│ username │       │ external_id │       │ title    │
+│ email   │       │ title       │──M:N──│ markdown │
+│ password │       │ url         │   │   │ status   │
+└──────────┘       │ dedup_hash  │   │   │ user_id ──│──┐
+     │ 1:1          │ score       │   │   └──────────┘  │
+     ├──────────────│ summary     │   │        │        │
+     │ 1:N          └──────────────┘   │   briefing_    │
+     │                   │ 1:1         │   articles      │
+┌──────────┐       ┌──────────────┐   │   ───────────── │
+│  sources │       │  bookmarks   │   │   briefing_id   │
+│──────────│       │──────────────│   └───article_id    │
+│ id       │       │ article_id  │       rank_position │
+│ name     │       │ user_id ────│──┐                    │
+│ type     │       │ note        │  │    ┌─────────────┐│
+│ url      │       └──────────────┘  ├────│ preferences ││
+│ enabled  │                          │    │─────────────││
+│ config   │       ┌──────────────┐   │    │ user_id ───│┘
+└──────────┘       │  fetch_logs  │   │    │ keywords    │
+     │             │──────────────│   │    │ llm_*       │
+     └──1:N────────│ source_id   │   │    │ schedule    │
+                   │ status      │   │    └─────────────┘
+                   │ count       │   │
+                   │ error       │   │
+                   └──────────────┘   │
+                    users ────────────┘
+                    (1:N briefings,
+                     bookmarks,
+                     preferences)
 ```
 
 ---
