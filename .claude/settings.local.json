@@ -22,7 +22,9 @@
       "Bash(curl -s -X POST http://localhost:8080/api/v1/fetch)",
       "Bash(curl -s http://localhost:8080/api/v1/articles?limit=3)",
       "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); [print\\(a['id'], a['title'][:60]\\) for a in d['data']['items']]\")",
-      "Bash(curl -s http://localhost:8080/api/v1/articles?limit=2)"
+      "Bash(curl -s http://localhost:8080/api/v1/articles?limit=2)",
+      "Bash(GONOSUMCHECK=* GONOSUMDB=* GOFLAGS=-insecure go clean -modcache)",
+      "Bash(go get:*)"
     ]
   }
 }
