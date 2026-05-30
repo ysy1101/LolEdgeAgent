@@ -1,0 +1,25 @@
+# 服务配置
+server:
+  port: "8080"
+  cors_origin: "http://localhost:5173"
+
+# 数据库
+database:
+  path: "./data/loledgeagent.db"
+
+# LLM 默认配置（可在前端 Preferences 页面覆盖）
+llm:
+  provider: "openai"
+  model: "gpt-4.1-mini"
+  base_url: ""
+  timeout_seconds: 60
+
+# 内容采集
+fetch:
+  timeout_seconds: 30
+  max_concurrency: 5
+
+# 定时调度
+scheduler:
+  enabled: false
+  default_cron: "0 8 * * *"

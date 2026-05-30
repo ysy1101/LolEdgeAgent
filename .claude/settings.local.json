@@ -3,7 +3,18 @@
     "allow": [
       "WebSearch",
       "WebFetch(domain:www.cloudwego.io)",
-      "WebFetch(domain:github.com)"
+      "WebFetch(domain:github.com)",
+      "Bash(go mod:*)",
+      "Bash(go build:*)",
+      "Bash(npx create-vite@latest frontend --template react-ts)",
+      "Bash(npm install:*)",
+      "Bash(npx tsc:*)",
+      "Bash(npx vite:*)",
+      "Bash(curl -s http://localhost:5173/)",
+      "Bash(curl -s http://localhost:5173/src/main.tsx)",
+      "Bash(curl -s http://localhost:5173/src/routes/index.tsx)",
+      "Bash(curl -s http://localhost:5173/src/layouts/DashboardLayout.tsx)",
+      "Bash(curl -s http://localhost:5173/src/index.css)"
     ]
   }
 }

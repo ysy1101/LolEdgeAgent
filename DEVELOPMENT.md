@@ -136,7 +136,7 @@ services:
       - LLM_API_KEY=${LLM_API_KEY}
     restart: unless-stopped
 
-  # 生产环境下前端用 nginx 部署；开发时直接用 Vite
+  
   frontend:
     build:
       context: ./frontend
@@ -442,7 +442,7 @@ type Plugin interface {
 | Step | 状态 | 开始时间 | 完成时间 |
 |------|------|---------|---------|
 | Step 0 — README 文档 | ✅ 已完成 | | 2026-05-29 |
-| Step 1 — 项目骨架 | ⏳ 待开始 | | |
+| Step 1 — 项目骨架 | ✅ 已完成 | 2026-05-30 | 2026-05-30 |
 | Step 2 — 数据层 | ⏳ 待开始 | | |
 | Step 3 — 插件系统 | ⏳ 待开始 | | |
 | Step 4 — LLM 集成 | ⏳ 待开始 | | |
