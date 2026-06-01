@@ -2,11 +2,11 @@ package v1
 
 import (
 	"log/slog"
-	"net/http"
-	"strconv"
 
+	"loledgeagent/internal/handler"
+	"loledgeagent/internal/llm"
 	"loledgeagent/internal/middleware"
-	"loledgeagent/internal/models"
+	"loledgeagent/internal/pipeline"
 	"loledgeagent/internal/repository"
 	"loledgeagent/internal/service"
 
@@ -17,87 +17,56 @@ import (
 func RegisterRoutes(r *gin.Engine, db *gorm.DB, logger *slog.Logger) {
 	r.Use(middleware.CORS("http://localhost:5173"))
 
-	// 初始化 repository 和 service
+	// ---- 依赖注入 ----
 	sourceRepo := repository.NewSourceRepo(db)
 	articleRepo := repository.NewArticleRepo(db)
-	logRepo := repository.NewFetchLogRepo(db)
-	prefRepo := repository.NewPreferenceRepo(db)
 	briefingRepo := repository.NewBriefingRepo(db)
+	prefRepo := repository.NewPreferenceRepo(db)
+	logRepo := repository.NewFetchLogRepo(db)
 
 	fetchSvc := service.NewFetchService(sourceRepo, articleRepo, logRepo, logger)
-	_ = fetchSvc
-	_ = briefingRepo
-	_ = prefRepo
 
+	// LLM client（如果未配置 API Key，client 为 nil，管线走降级逻辑）
+	llmCfg := llm.LoadConfig()
+	var llmClient *llm.Client
+	if llmCfg.APIKey != "" {
+		llmClient = llm.NewClient(llmCfg)
+	}
+
+	engine := pipeline.NewEngine(articleRepo, briefingRepo, prefRepo, llmClient, logger)
+	briefingSvc := service.NewBriefingService(db, fetchSvc, engine, logger)
+
+	// ---- 路由 ----
 	api := r.Group("/api/v1")
 	{
-		api.GET("/health", func(c *gin.Context) {
-			sqlDB, _ := db.DB()
-			dbStatus := "ok"
-			if sqlDB != nil {
-				dbStatus = "ok"
-			}
-			c.JSON(http.StatusOK, gin.H{
-				"code":    0,
-				"message": "success",
-				"data": gin.H{
-					"status": "ok",
-					"db":     dbStatus,
-					"llm":    "pending",
-				},
-			})
-		})
-
-		// === 临时测试路由，Step 6 会用正式 handler 替换 ===
+		// 健康检查
+		healthH := handler.NewHealthHandler(db)
+		api.GET("/health", healthH.Check)
 
 		// 源管理
-		api.GET("/sources", func(c *gin.Context) {
-			list, err := sourceRepo.List(false)
-			if err != nil {
-				c.JSON(500, gin.H{"code": 500, "message": err.Error()})
-				return
-			}
-			c.JSON(200, gin.H{"code": 0, "message": "success", "data": list})
-		})
+		sourceH := handler.NewSourceHandler(sourceRepo, fetchSvc)
+		api.GET("/sources", sourceH.List)
+		api.POST("/sources", sourceH.Create)
+		api.GET("/sources/:id", sourceH.Get)
+		api.PUT("/sources/:id", sourceH.Update)
+		api.DELETE("/sources/:id", sourceH.Delete)
+		api.POST("/sources/:id/fetch", sourceH.Fetch)
 
-		api.POST("/sources", func(c *gin.Context) {
-			var s models.Source
-			if err := c.ShouldBindJSON(&s); err != nil {
-				c.JSON(400, gin.H{"code": 400, "message": err.Error()})
-				return
-			}
-			if err := sourceRepo.Create(&s); err != nil {
-				c.JSON(500, gin.H{"code": 500, "message": err.Error()})
-				return
-			}
-			c.JSON(201, gin.H{"code": 0, "message": "success", "data": s})
-		})
+		// 文章
+		articleH := handler.NewArticleHandler(articleRepo, fetchSvc)
+		api.GET("/articles", articleH.List)
+		api.POST("/articles/fetch", articleH.FetchAll)
 
-		// 抓取
-		api.POST("/fetch", func(c *gin.Context) {
-			articles, err := fetchSvc.FetchAll(c.Request.Context())
-			if err != nil {
-				c.JSON(500, gin.H{"code": 500, "message": err.Error()})
-				return
-			}
-			c.JSON(200, gin.H{"code": 0, "message": "success", "data": gin.H{
-				"articles_fetched": len(articles),
-			}})
-		})
+		// 简报
+		briefingH := handler.NewBriefingHandler(briefingSvc)
+		api.GET("/briefings", briefingH.List)
+		api.POST("/briefings/generate", briefingH.Generate)
+		api.GET("/briefings/:id", briefingH.Get)
+		api.DELETE("/briefings/:id", briefingH.Delete)
 
-		// 文章列表
-		api.GET("/articles", func(c *gin.Context) {
-			page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
-			limit, _ := strconv.Atoi(c.DefaultQuery("limit", "20"))
-			sourceID, _ := strconv.Atoi(c.DefaultQuery("source_id", "0"))
-			list, total, err := articleRepo.List(uint(sourceID), page, limit)
-			if err != nil {
-				c.JSON(500, gin.H{"code": 500, "message": err.Error()})
-				return
-			}
-			c.JSON(200, gin.H{"code": 0, "message": "success", "data": gin.H{
-				"items": list, "total": total, "page": page, "page_size": limit,
-			}})
-		})
+		// 偏好设置
+		prefH := handler.NewPreferenceHandler(prefRepo)
+		api.GET("/preferences", prefH.Get)
+		api.PUT("/preferences", prefH.Update)
 	}
 }
