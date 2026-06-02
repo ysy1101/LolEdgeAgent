@@ -1,8 +1,85 @@
+import React, { useCallback, useEffect, useState } from 'react';
+import { useNavigate } from 'react-router';
+import { api } from '../../lib/api';
+import type { Briefing } from '../../types';
+import { Card, Badge, Spinner } from '../../components/ui';
+import { Plus } from 'lucide-react';
+
 export default function BriefingList() {
+  const [briefings, setBriefings] = useState<Briefing[]>([]);
+  const [generating, setGenerating] = useState(false);
+  const navigate = useNavigate();
+
+  const load = useCallback(async () => {
+    try {
+      const r = await api.briefings.list(1, 50);
+      setBriefings(r.items);
+    } catch { /* */ }
+  }, []);
+  useEffect(() => { load(); }, [load]);
+
+  const handleGenerate = async () => {
+    if (generating) return;
+    setGenerating(true);
+    try {
+      const r = await api.briefings.generate();
+      alert(`生成任务已启动，简报 ID: ${r.briefing_id}。完成后会出现在列表中。`);
+      // 隔几秒自动刷新
+      setTimeout(load, 3000);
+      setTimeout(load, 8000);
+    } catch (e: any) {
+      alert('生成失败: ' + e.message);
+    } finally {
+      setGenerating(false);
+    }
+  };
+
   return (
     <div>
-      <h1 className="mb-6 text-2xl font-semibold text-gray-900">简报列表</h1>
-      <p className="text-gray-500">功能开发中，完成后可在此查看生成的简报。</p>
+      <div className="mb-4 flex items-center justify-between">
+        <h2 className="text-xl font-semibold text-gray-900">简报列表</h2>
+        <button onClick={handleGenerate} disabled={generating}
+          className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50">
+          {generating ? <Spinner className="h-4 w-4 border-white border-t-transparent" /> : <Plus className="h-4 w-4" />}
+          {generating ? '生成中...' : '生成简报'}
+        </button>
+      </div>
+
+      {briefings.length === 0 ? (
+        <Card>
+          <div className="py-12 text-center text-gray-500">
+            <p className="mb-2">暂无简报</p>
+            <p className="text-xs">点击"生成简报"开始你的第一份内容简报</p>
+          </div>
+        </Card>
+      ) : (
+        <div className="space-y-2">
+          {briefings.map((b) => (
+            <Card
+              key={b.id}
+              className="flex cursor-pointer items-center justify-between hover:shadow-md transition-shadow"
+              onClick={() => navigate(`/briefings/${b.id}`)}
+            >
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="font-medium text-gray-900">{b.title}</span>
+                  <StatusBadge status={b.status} />
+                </div>
+                <p className="mt-1 text-xs text-gray-500">
+                  {b.generated_at} · {b.article_count} 篇文章
+                </p>
+              </div>
+              <span className="text-sm text-gray-400">→</span>
+            </Card>
+          ))}
+        </div>
+      )}
     </div>
   );
+}
+
+function StatusBadge({ status }: { status: string }) {
+  const label = { pending: '待处理', generating: '生成中', completed: '已完成', failed: '失败' }[status] || status;
+  const color = status === 'completed' ? 'green' : status === 'failed' ? 'red' : status === 'generating' ? 'blue' : 'gray';
+  return <Badge color={color}>{label}</Badge>;
 }
