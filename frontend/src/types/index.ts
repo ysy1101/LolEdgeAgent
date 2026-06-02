@@ -28,6 +28,7 @@ export interface Article {
 // 简报
 export interface Briefing {
   id: number;
+  user_id: number;
   title: string;
   content_markdown: string;
   article_count: number;
@@ -37,10 +38,12 @@ export interface Briefing {
   articles?: Article[];
 }
 
-// 用户偏好
+// 用户偏好（keywords/excluded_keywords 后端返回 JSON 字符串，前端使用时解析）
 export interface Preferences {
-  keywords: string[];
-  excluded_keywords: string[];
+  id: number;
+  user_id: number;
+  keywords: string;             // JSON 字符串，如 '["go","rust"]'
+  excluded_keywords: string;    // JSON 字符串
   max_articles_per_source: number;
   max_briefing_articles: number;
   llm_provider: string;
@@ -48,6 +51,7 @@ export interface Preferences {
   llm_api_key: string;
   llm_base_url: string;
   briefing_schedule: string;
+  updated_at: string;
 }
 
 // 统一响应

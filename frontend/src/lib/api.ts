@@ -1,4 +1,4 @@
-import type { ApiResponse } from '../types';
+import type { Source, Briefing, Article, Preferences, Paginated } from '../types';
 
 const BASE_URL = '/api/v1';
 
@@ -57,5 +57,3 @@ export const api = {
       request<Preferences>('/preferences', { method: 'PUT', body: JSON.stringify(data) }),
   },
 };
-
-import type { Source, Briefing, Article, Preferences, FetchLog, HealthStatus, Paginated } from '../types';
