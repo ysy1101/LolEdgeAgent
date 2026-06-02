@@ -1,5 +1,5 @@
 import { NavLink } from 'react-router';
-import { FileText, Radio, Settings, Zap } from 'lucide-react';
+import { FileText, Radio, Settings, Zap, RefreshCw } from 'lucide-react';
 
 export function Sidebar() {
   return (
@@ -14,6 +14,16 @@ export function Sidebar() {
         <NavItem to="/sources" icon={<Radio className="h-4 w-4" />} label="内容源" />
         <NavItem to="/preferences" icon={<Settings className="h-4 w-4" />} label="偏好设置" />
       </nav>
+
+      <div className="border-t border-gray-200 p-3">
+        <a
+          href="/briefings"
+          className="flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700 transition-colors"
+        >
+          <RefreshCw className="h-4 w-4" />
+          生成简报
+        </a>
+      </div>
     </aside>
   );
 }
