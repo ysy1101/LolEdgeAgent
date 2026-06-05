@@ -20,9 +20,13 @@ type Config struct {
 
 // LoadConfig 从环境变量加载 LLM 配置
 func LoadConfig() Config {
+	key := os.Getenv("LLM_API_KEY")
+	if key == "" {
+		key = os.Getenv("API_KEY")
+	}
 	return Config{
 		Model:   envOrDefault("LLM_MODEL", "deepseek-chat"),
-		APIKey:  os.Getenv("LLM_API_KEY"),
+		APIKey:  key,
 		BaseURL: baseURLOrDefault(),
 	}
 }

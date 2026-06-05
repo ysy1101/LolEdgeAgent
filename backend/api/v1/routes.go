@@ -30,6 +30,18 @@ func RegisterRoutes(r *gin.Engine, db *gorm.DB, logger *slog.Logger) {
 
 	// LLM client（如果未配置 API Key，client 为 nil，管线走降级逻辑）
 	llmCfg := llm.LoadConfig()
+	defaultPref, _ := prefRepo.Get(1)
+	if llmCfg.APIKey == "" && defaultPref != nil && defaultPref.LLMAPIKey != "" {
+		llmCfg.APIKey = defaultPref.LLMAPIKey
+		llmCfg.BaseURL = defaultPref.LLMBaseURL
+		llmCfg.Model = defaultPref.LLMModel
+	}
+	if defaultPref != nil && defaultPref.LLMAPIKey == "" && llmCfg.APIKey != "" {
+		defaultPref.LLMAPIKey = llmCfg.APIKey
+		defaultPref.LLMBaseURL = llmCfg.BaseURL
+		defaultPref.LLMModel = llmCfg.Model
+		_ = prefRepo.Update(1, defaultPref)
+	}
 	var llmClient *llm.Client
 	if llmCfg.APIKey != "" {
 		llmClient = llm.NewClient(llmCfg)
