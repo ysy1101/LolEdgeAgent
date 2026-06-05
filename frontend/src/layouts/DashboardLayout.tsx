@@ -3,6 +3,7 @@ import { Sidebar } from '../components/layout/Sidebar';
 import { Header } from '../components/layout/Header';
 
 const titles: Record<string, string> = {
+  '/chat': '对话',
   '/briefings': '简报',
   '/sources': '内容源管理',
   '/preferences': '偏好设置',

@@ -4,6 +4,7 @@ import BriefingList from '../pages/Briefings/BriefingList';
 import BriefingDetail from '../pages/Briefings/BriefingDetail';
 import SourceList from '../pages/Sources/SourceList';
 import Preferences from '../pages/Preferences';
+import Chat from '../pages/Chat';
 import NotFound from '../pages/NotFound';
 
 export const router = createBrowserRouter([
@@ -11,7 +12,8 @@ export const router = createBrowserRouter([
     path: '/',
     element: <DashboardLayout />,
     children: [
-      { index: true, element: <Navigate to="/briefings" replace /> },
+      { index: true, element: <Navigate to="/chat" replace /> },
+      { path: 'chat', element: <Chat /> },
       { path: 'briefings', element: <BriefingList /> },
       { path: 'briefings/:id', element: <BriefingDetail /> },
       { path: 'sources', element: <SourceList /> },
