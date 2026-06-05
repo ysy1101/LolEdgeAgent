@@ -113,22 +113,40 @@ function SourceBadge({ type }: { type: string }) {
   return <span className={`inline-flex rounded px-1.5 py-0.5 text-xs font-medium ${color}`}>{type}</span>;
 }
 
+function parseConfig(cfg: string): Record<string, unknown> {
+  try { return JSON.parse(cfg) as Record<string, unknown>; } catch { return {}; }
+}
+
 function SourceFormPanel({ edit, onClose, onSaved }: {
   edit: Source | null;
   onClose: () => void;
   onSaved: () => void;
 }) {
+  const cfg = parseConfig(edit?.config_json || '');
   const [name, setName] = useState(edit?.name || '');
   const [stype, setStype] = useState(edit?.source_type || 'rss');
   const [url, setUrl] = useState(edit?.url || '');
   const [enabled, setEnabled] = useState(edit?.enabled ?? true);
   const [saving, setSaving] = useState(false);
 
+  // HN fields
+  const [hnType, setHnType] = useState((cfg.story_type as string) || 'top');
+  const [hnMax, setHnMax] = useState((cfg.max_items as number) || 30);
+  // GitHub fields
+  const [ghLang, setGhLang] = useState((cfg.language as string) || '');
+  const [ghSince, setGhSince] = useState((cfg.since as string) || 'daily');
+
+  const buildConfig = (): string => {
+    if (stype === 'hackernews') return JSON.stringify({ story_type: hnType, max_items: hnMax });
+    if (stype === 'github') return JSON.stringify({ language: ghLang, since: ghSince });
+    return '';
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
     try {
-      const payload = { name, source_type: stype, url, enabled, config_json: '' };
+      const payload = { name, source_type: stype, url, enabled, config_json: buildConfig() };
       if (edit) {
         await api.sources.update(edit.id, payload);
       } else {
@@ -164,7 +182,55 @@ function SourceFormPanel({ edit, onClose, onSaved }: {
 
         <label className="mb-1 block text-sm font-medium text-gray-700">URL</label>
         <input className="mb-3 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-          value={url} onChange={(e) => setUrl(e.target.value)} required placeholder="https://..." />
+          value={url} onChange={(e) => setUrl(e.target.value)} required
+          placeholder={stype === 'hackernews' ? 'https://hacker-news.firebaseio.com' : stype === 'github' ? 'https://github.com' : 'https://...'} />
+
+        {/* HN 额外配置 */}
+        {stype === 'hackernews' && (
+          <div className="mb-3 rounded-lg bg-amber-50 p-3">
+            <p className="mb-2 text-xs font-medium text-amber-800">HackerNews 配置</p>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="mb-1 block text-xs text-amber-700">榜单类型</label>
+                <select className="w-full rounded border border-amber-300 bg-white px-2 py-1.5 text-sm"
+                  value={hnType} onChange={(e) => setHnType(e.target.value)}>
+                  <option value="top">Top（热门）</option>
+                  <option value="new">New（最新）</option>
+                  <option value="best">Best（最佳）</option>
+                </select>
+              </div>
+              <div>
+                <label className="mb-1 block text-xs text-amber-700">抓取条数</label>
+                <input type="number" className="w-full rounded border border-amber-300 bg-white px-2 py-1.5 text-sm"
+                  value={hnMax} onChange={(e) => setHnMax(+e.target.value)} min={1} max={100} />
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* GitHub 额外配置 */}
+        {stype === 'github' && (
+          <div className="mb-3 rounded-lg bg-gray-100 p-3">
+            <p className="mb-2 text-xs font-medium text-gray-700">GitHub Trending 配置</p>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="mb-1 block text-xs text-gray-600">时间范围</label>
+                <select className="w-full rounded border border-gray-300 bg-white px-2 py-1.5 text-sm"
+                  value={ghSince} onChange={(e) => setGhSince(e.target.value)}>
+                  <option value="daily">今日</option>
+                  <option value="weekly">本周</option>
+                  <option value="monthly">本月</option>
+                </select>
+              </div>
+              <div>
+                <label className="mb-1 block text-xs text-gray-600">语言</label>
+                <input className="w-full rounded border border-gray-300 bg-white px-2 py-1.5 text-sm"
+                  value={ghLang} onChange={(e) => setGhLang(e.target.value)}
+                  placeholder="留空=全部 如 go" />
+              </div>
+            </div>
+          </div>
+        )}
 
         <label className="mb-4 flex items-center gap-2 text-sm text-gray-700">
           <input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} />
