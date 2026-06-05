@@ -110,4 +110,13 @@ type FetchLog struct {
 	CompletedAt     *time.Time `json:"completed_at"`
 }
 
+// ArticleEmbedding 文章向量
+type ArticleEmbedding struct {
+	ID        uint   `gorm:"primaryKey" json:"id"`
+	ArticleID uint   `gorm:"not null;uniqueIndex" json:"article_id"`
+	Embedding string `gorm:"not null" json:"embedding"` // JSON 向量数组
+}
+
+func (ArticleEmbedding) TableName() string { return "article_embeddings" }
+
 func (FetchLog) TableName() string { return "fetch_logs" }

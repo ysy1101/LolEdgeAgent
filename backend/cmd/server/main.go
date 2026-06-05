@@ -30,6 +30,7 @@ func main() {
 		&models.Bookmark{},
 		&models.Preference{},
 		&models.FetchLog{},
+		&models.ArticleEmbedding{},
 	)
 
 	// 默认用户（MVP 阶段硬编码）
