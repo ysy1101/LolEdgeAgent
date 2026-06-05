@@ -48,7 +48,7 @@ func RegisterRoutes(r *gin.Engine, db *gorm.DB, logger *slog.Logger) {
 	}
 
 	engine := pipeline.NewEngine(articleRepo, briefingRepo, prefRepo, llmClient, logger)
-	briefingSvc := service.NewBriefingService(db, fetchSvc, engine, logger)
+	briefingSvc := service.NewBriefingService(db, fetchSvc, articleRepo, engine, logger)
 
 	// 启动定时调度器
 	sched := scheduler.New(briefingSvc, logger)

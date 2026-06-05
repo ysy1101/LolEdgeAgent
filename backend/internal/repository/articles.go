@@ -71,6 +71,12 @@ func (r *ArticleRepo) List(sourceID uint, page, limit int) ([]models.Article, in
 	return articles, total, q.Offset(offset).Limit(limit).Find(&articles).Error
 }
 
+// GetRecent 获取最近 N 篇未评分的文章
+func (r *ArticleRepo) GetRecent(limit int) ([]models.Article, error) {
+	var articles []models.Article
+	return articles, r.db.Order("fetched_at DESC").Limit(limit).Find(&articles).Error
+}
+
 // UpdateSummary 更新单篇文章的摘要和评分
 func (r *ArticleRepo) UpdateSummary(id uint, summary string, score float64) error {
 	return r.db.Model(&models.Article{}).Where("id = ?", id).

@@ -36,7 +36,12 @@
       "Bash(curl -s -X DELETE http://localhost:8080/api/v1/sources/1)",
       "Bash(taskkill //F //IM main.exe)",
       "Bash(taskkill //F //IM server.exe)",
-      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\)['data']; print\\('provider:', d['llm_provider'], '\\\\nmodel:', d['llm_model'], '\\\\napikey_set:', bool\\(d['llm_api_key']\\), '\\\\nbaseurl:', d['llm_base_url']\\)\")"
+      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\)['data']; print\\('provider:', d['llm_provider'], '\\\\nmodel:', d['llm_model'], '\\\\napikey_set:', bool\\(d['llm_api_key']\\), '\\\\nbaseurl:', d['llm_base_url']\\)\")",
+      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\)['data']; print\\('sources:', len\\(d\\) if d else 0\\)\")",
+      "Bash(curl -s http://localhost:8080/api/v1/articles?limit=1)",
+      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\)['data']; print\\('articles:', d['total']\\)\")",
+      "Bash(curl -s -X POST http://localhost:8080/api/v1/briefings/generate)",
+      "Bash(curl -s http://localhost:8080/api/v1/briefings?limit=3)"
     ]
   }
 }

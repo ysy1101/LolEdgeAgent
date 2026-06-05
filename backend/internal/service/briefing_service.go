@@ -12,23 +12,26 @@ import (
 )
 
 type BriefingService struct {
-	repo     *repository.BriefingRepo
-	fetchSvc *FetchService
-	engine   *pipeline.Engine
-	logger   *slog.Logger
+	repo        *repository.BriefingRepo
+	fetchSvc    *FetchService
+	articleRepo *repository.ArticleRepo
+	engine      *pipeline.Engine
+	logger      *slog.Logger
 }
 
 func NewBriefingService(
 	db *gorm.DB,
 	fetchSvc *FetchService,
+	articleRepo *repository.ArticleRepo,
 	engine *pipeline.Engine,
 	logger *slog.Logger,
 ) *BriefingService {
 	return &BriefingService{
-		repo:     repository.NewBriefingRepo(db),
-		fetchSvc: fetchSvc,
-		engine:   engine,
-		logger:   logger,
+		repo:        repository.NewBriefingRepo(db),
+		fetchSvc:    fetchSvc,
+		articleRepo: articleRepo,
+		engine:      engine,
+		logger:      logger,
 	}
 }
 
@@ -47,10 +50,11 @@ func (s *BriefingService) GenerateAsync(ctx context.Context, userID uint) (uint,
 	go func() {
 		bg := context.Background()
 
-		articles, err := s.fetchSvc.FetchAll(bg)
-		if err != nil {
-			_ = s.repo.UpdateStatus(placeholder.ID, "failed", err.Error())
-			s.logger.Error("fetch failed", "error", err)
+		// 从 DB 读最近文章，而不是重新抓取（抓取会去重，已有文章返回空）
+		articles, err := s.articleRepo.GetRecent(200)
+		if err != nil || len(articles) == 0 {
+			_ = s.repo.UpdateStatus(placeholder.ID, "failed", "no articles in database, fetch first")
+			s.logger.Error("no articles", "error", err)
 			return
 		}
 
