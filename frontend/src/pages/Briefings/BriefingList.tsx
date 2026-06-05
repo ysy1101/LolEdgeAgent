@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router';
 import { api } from '../../lib/api';
 import type { Briefing } from '../../types';
 import { Card, Badge, Spinner } from '../../components/ui';
-import { Plus } from 'lucide-react';
+import { Plus, Trash2 } from 'lucide-react';
 
 export default function BriefingList() {
   const [briefings, setBriefings] = useState<Briefing[]>([]);
@@ -25,6 +25,13 @@ export default function BriefingList() {
     const timer = setInterval(load, 5000);
     return () => clearInterval(timer);
   }, [hasGenerating, load]);
+
+  const handleDelete = async (e: React.MouseEvent, id: number) => {
+    e.stopPropagation();
+    if (!confirm('确定删除此简报？')) return;
+    await api.briefings.delete(id);
+    load();
+  };
 
   const handleGenerate = async () => {
     if (generating) return;
@@ -75,7 +82,11 @@ export default function BriefingList() {
                   {b.generated_at} · {b.article_count} 篇文章
                 </p>
               </div>
-              <span className="text-sm text-gray-400">→</span>
+              <button onClick={(e) => handleDelete(e, b.id)}
+                className="rounded p-1.5 text-gray-400 hover:bg-red-50 hover:text-red-600"
+                title="删除">
+                <Trash2 className="h-4 w-4" />
+              </button>
             </Card>
           ))}
         </div>
