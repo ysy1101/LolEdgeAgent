@@ -10,7 +10,7 @@ RUN CGO_ENABLED=0 go build -o server cmd/server/main.go
 FROM alpine:3.19
 WORKDIR /app
 COPY --from=builder /app/server .
-COPY ../configs/ ./configs/
-RUN mkdir -p data
+RUN mkdir -p /app/data
 EXPOSE 8080
+ENV DB_PATH=/app/data/loledgeagent.db
 CMD ["./server"]
