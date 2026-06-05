@@ -1,5 +1,5 @@
 import { NavLink } from 'react-router';
-import { FileText, Radio, Settings, Zap, RefreshCw } from 'lucide-react';
+import { FileText, Radio, Settings, Zap, RefreshCw, MessageSquare } from 'lucide-react';
 
 export function Sidebar() {
   return (
@@ -10,6 +10,7 @@ export function Sidebar() {
       </div>
 
       <nav className="flex flex-1 flex-col gap-1 p-3">
+        <NavItem to="/chat" icon={<MessageSquare className="h-4 w-4" />} label="对话" end />
         <NavItem to="/briefings" icon={<FileText className="h-4 w-4" />} label="简报" end />
         <NavItem to="/sources" icon={<Radio className="h-4 w-4" />} label="内容源" />
         <NavItem to="/preferences" icon={<Settings className="h-4 w-4" />} label="偏好设置" />
