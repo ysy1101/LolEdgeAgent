@@ -18,15 +18,21 @@ export default function BriefingList() {
   }, []);
   useEffect(() => { load(); }, [load]);
 
+  // 如果存在正在生成的简报，每 5 秒轮询
+  const hasGenerating = briefings.some((b) => b.status === 'generating' || b.status === 'pending');
+  useEffect(() => {
+    if (!hasGenerating) return;
+    const timer = setInterval(load, 5000);
+    return () => clearInterval(timer);
+  }, [hasGenerating, load]);
+
   const handleGenerate = async () => {
     if (generating) return;
     setGenerating(true);
     try {
       const r = await api.briefings.generate();
-      alert(`生成任务已启动，简报 ID: ${r.briefing_id}。完成后会出现在列表中。`);
-      // 隔几秒自动刷新
-      setTimeout(load, 3000);
-      setTimeout(load, 8000);
+      alert(`生成任务已启动，简报 ID: ${r.briefing_id}。完成后自动刷新列表。`);
+      await load(); // 立即刷新列表
     } catch (e: any) {
       alert('生成失败: ' + e.message);
     } finally {
