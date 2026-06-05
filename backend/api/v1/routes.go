@@ -8,6 +8,7 @@ import (
 	"loledgeagent/internal/middleware"
 	"loledgeagent/internal/pipeline"
 	"loledgeagent/internal/repository"
+	"loledgeagent/internal/scheduler"
 	"loledgeagent/internal/service"
 
 	"github.com/gin-gonic/gin"
@@ -35,6 +36,15 @@ func RegisterRoutes(r *gin.Engine, db *gorm.DB, logger *slog.Logger) {
 
 	engine := pipeline.NewEngine(articleRepo, briefingRepo, prefRepo, llmClient, logger)
 	briefingSvc := service.NewBriefingService(db, fetchSvc, engine, logger)
+
+	// 启动定时调度器
+	sched := scheduler.New(briefingSvc, logger)
+	pref, _ := prefRepo.Get(1)
+	if pref != nil && pref.BriefingSchedule != "" {
+		if err := sched.Start(pref.BriefingSchedule); err != nil {
+			logger.Error("scheduler start failed", "error", err)
+		}
+	}
 
 	// ---- 路由 ----
 	api := r.Group("/api/v1")
