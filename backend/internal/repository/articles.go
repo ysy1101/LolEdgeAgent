@@ -19,6 +19,14 @@ func (r *ArticleRepo) UpsertBatch(articles []models.Article) error {
 	return r.db.Clauses(clause.OnConflict{DoNothing: true}).Create(&articles).Error
 }
 
+func (r *ArticleRepo) Get(id uint) (*models.Article, error) {
+	var a models.Article
+	if err := r.db.First(&a, id).Error; err != nil {
+		return nil, err
+	}
+	return &a, nil
+}
+
 // FindByHash 根据 dedup_hash 查找
 func (r *ArticleRepo) FindByHash(hash string) (*models.Article, error) {
 	var a models.Article

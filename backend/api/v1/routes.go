@@ -26,6 +26,7 @@ func RegisterRoutes(r *gin.Engine, db *gorm.DB, logger *slog.Logger) {
 	logRepo := repository.NewFetchLogRepo(db)
 
 	fetchSvc := service.NewFetchService(sourceRepo, articleRepo, logRepo, logger)
+	embRepo := repository.NewEmbeddingRepo(db)
 
 	// LLM client（如果未配置 API Key，client 为 nil，管线走降级逻辑）
 	llmCfg := llm.LoadConfig()
@@ -78,5 +79,49 @@ func RegisterRoutes(r *gin.Engine, db *gorm.DB, logger *slog.Logger) {
 		prefH := handler.NewPreferenceHandler(prefRepo)
 		api.GET("/preferences", prefH.Get)
 		api.PUT("/preferences", prefH.Update)
+
+		// RAG 问答（需要 LLM key）
+		ragSvc := service.NewRAGService(embRepo, articleRepo, llmClient, logger)
+		api.POST("/search", func(c *gin.Context) {
+			var body struct {
+				Query string `json:"query"`
+				TopK  int    `json:"top_k"`
+			}
+			if err := c.ShouldBindJSON(&body); err != nil {
+				c.JSON(400, gin.H{"code": 400, "message": err.Error()})
+				return
+			}
+			if body.TopK <= 0 {
+				body.TopK = 5
+			}
+			articles, err := ragSvc.Search(c.Request.Context(), body.Query, body.TopK)
+			if err != nil {
+				c.JSON(500, gin.H{"code": 500, "message": err.Error()})
+				return
+			}
+			c.JSON(200, gin.H{"code": 0, "message": "success", "data": articles})
+		})
+		api.POST("/ask", func(c *gin.Context) {
+			var body struct {
+				Question string `json:"question"`
+				TopK     int    `json:"top_k"`
+			}
+			if err := c.ShouldBindJSON(&body); err != nil {
+				c.JSON(400, gin.H{"code": 400, "message": err.Error()})
+				return
+			}
+			if body.TopK <= 0 {
+				body.TopK = 5
+			}
+			answer, articles, err := ragSvc.Ask(c.Request.Context(), body.Question, body.TopK)
+			if err != nil {
+				c.JSON(500, gin.H{"code": 500, "message": err.Error()})
+				return
+			}
+			c.JSON(200, gin.H{"code": 0, "message": "success", "data": gin.H{
+				"answer":   answer,
+				"articles": articles,
+			}})
+		})
 	}
 }
