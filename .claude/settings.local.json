@@ -33,7 +33,10 @@
       "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\('id:', d['data']['id'], 'provider:', d['data']['llm_provider']\\)\")",
       "Bash(curl -s -X PUT http://localhost:8080/api/v1/preferences -H \"Content-Type: application/json\" -d '{\"keywords\":\"[\\\\\"go\\\\\",\\\\\"rust\\\\\"]\",\"llm_model\":\"deepseek-chat\",\"max_briefing_articles\":5}' echo \"\" echo \"=== GET briefings ===\")",
       "Bash(curl -s http://localhost:8080/api/v1/briefings echo \"\" echo \"=== DELETE source ===\")",
-      "Bash(curl -s -X DELETE http://localhost:8080/api/v1/sources/1)"
+      "Bash(curl -s -X DELETE http://localhost:8080/api/v1/sources/1)",
+      "Bash(taskkill //F //IM main.exe)",
+      "Bash(taskkill //F //IM server.exe)",
+      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\)['data']; print\\('provider:', d['llm_provider'], '\\\\nmodel:', d['llm_model'], '\\\\napikey_set:', bool\\(d['llm_api_key']\\), '\\\\nbaseurl:', d['llm_base_url']\\)\")"
     ]
   }
 }
