@@ -179,12 +179,31 @@ function tryParseArticles(_content: string): Article[] | undefined {
   return undefined;
 }
 
-// 提取 LLM JSON 回复中的真实文本
+// 提取 Agent 回复中的真实文本（处理 LLM 可能返回的 JSON 包裹或工具调用残留）
 function unwrapJSON(text: string): string {
+  // 尝试 JSON 解析
   try {
     const obj = JSON.parse(text);
+    // 最终回复
+    if (obj.type === 'final' || obj.type === 'answer') {
+      return obj.content || text;
+    }
+    // 如果是工具调用残留，转换成可读文本
+    if (obj.type === 'tool') {
+      return `正在使用 ${obj.name} 工具...`;
+    }
+    // 返回 content 字段
     if (obj.content && typeof obj.content === 'string') return obj.content;
-    if (obj.type === 'final' && obj.content) return obj.content;
   } catch {}
+
+  // LLM 可能在文本中嵌入了 JSON，尝试提取最后一个完整 JSON 的 content
+  const matches = text.match(/\{"type":"final","content":"([^"]+)"\}/g);
+  if (matches) {
+    try {
+      const last = JSON.parse(matches[matches.length - 1]);
+      if (last.content) return last.content;
+    } catch {}
+  }
+
   return text;
 }
