@@ -79,12 +79,16 @@ func (a *Agent) Run(ctx context.Context, history []Message, userMsg string) (*Re
 
 		resp, err := a.parseResponse(raw)
 		if err != nil || resp.Type == "" {
-			// LLM 没按 JSON 回复，直接作为最终回答
-			return &Reply{Content: raw}, nil
+			return &Reply{Content: cleanReply(raw)}, nil
 		}
 
 		if resp.Type == "final" || resp.Type == "answer" {
 			return &Reply{Content: resp.Content}, nil
+		}
+
+		// 如果是工具调用但解析失败，不当成最终回答
+		if resp.Type == "tool" {
+			a.logger.Info("agent tool call (unexpected final)", "tool", resp.ToolName)
 		}
 
 		// 执行工具
@@ -165,6 +169,30 @@ func min(a, b int) int {
 		return a
 	}
 	return b
+}
+
+// cleanReply 去除回复中的 JSON 工具调用残留
+func cleanReply(raw string) string {
+	// 先尝试当 JSON 解，提取 content
+	var resp LLMResponse
+	if err := json.Unmarshal([]byte(raw), &resp); err == nil {
+		if resp.Content != "" {
+			return resp.Content
+		}
+	}
+	// 去掉内嵌的 JSON tool call
+	for {
+		start := strings.Index(raw, `{"type":"tool"`)
+		if start < 0 {
+			break
+		}
+		end := strings.Index(raw[start:], "}")
+		if end < 0 {
+			break
+		}
+		raw = raw[:start] + raw[start+end+1:]
+	}
+	return strings.TrimSpace(raw)
 }
 
 
