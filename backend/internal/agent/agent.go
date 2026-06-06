@@ -10,7 +10,10 @@ import (
 	"loledgeagent/internal/llm"
 )
 
-const maxRounds = 8
+const (
+	maxRounds       = 8
+	maxContextChars = 12000 // 上下文字符数上限，超过则截断
+)
 
 type Message struct {
 	Role    string // system / user / assistant / tool
@@ -47,10 +50,13 @@ func (a *Agent) Run(ctx context.Context, history []Message, userMsg string) (*Re
 	// 系统提示
 	system := a.systemPrompt()
 
-	// 历史消息压缩
+	// 历史消息（超过阈值截断开头，保留最近对话）
 	var userContent string
 	for _, m := range history {
 		userContent += fmt.Sprintf("%s: %s\n", m.Role, m.Content)
+	}
+	if len(userContent) > maxContextChars {
+		userContent = "…(更早的对话已省略)…\n" + userContent[len(userContent)-maxContextChars:]
 	}
 	if userContent != "" {
 		system += "\n\n## 对话历史\n" + userContent
@@ -61,6 +67,9 @@ func (a *Agent) Run(ctx context.Context, history []Message, userMsg string) (*Re
 
 	for round := 0; round < maxRounds; round++ {
 		a.logger.Info("agent round", "round", round+1)
+
+		// 上下文保护：超过阈值截断中间消息
+		messages = a.trimContext(messages)
 
 		// 调 LLM（多轮消息）
 		raw, err := a.llmClient.ChatMessages(ctx, messages)
@@ -107,6 +116,26 @@ func (a *Agent) Run(ctx context.Context, history []Message, userMsg string) (*Re
 	return &Reply{Content: "抱歉，处理超时，请简化问题重试。"}, nil
 }
 
+
+// trimContext 截断中间消息，保留 system prompt 和最近轮次
+func (a *Agent) trimContext(msgs []llm.ChatMessage) []llm.ChatMessage {
+	total := 0
+	for _, m := range msgs {
+		total += len(m.Content)
+	}
+	if total <= maxContextChars || len(msgs) <= 5 {
+		return msgs
+	}
+	keep := 4
+	if len(msgs)-keep < 1 {
+		keep = len(msgs) - 1
+	}
+	result := make([]llm.ChatMessage, 0, keep+2)
+	result = append(result, msgs[0])
+	result = append(result, llm.ChatMessage{Role: "system", Content: "…(中间消息已截断)…"})
+	result = append(result, msgs[len(msgs)-keep:]...)
+	return result
+}
 
 func (a *Agent) parseResponse(raw string) (*LLMResponse, error) {
 	s := strings.TrimSpace(raw)
