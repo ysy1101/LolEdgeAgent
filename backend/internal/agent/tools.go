@@ -8,6 +8,13 @@ import (
 	"loledgeagent/internal/service"
 )
 
+func getUserID(ctx context.Context) uint {
+	if id, ok := ctx.Value("user_id").(uint); ok && id > 0 {
+		return id
+	}
+	return 1
+}
+
 // RegisterAllTools 注册所有工具，需要在 DI 完成后调用
 func RegisterAllTools(
 	articleRepo *repository.ArticleRepo,
@@ -54,7 +61,7 @@ func RegisterAllTools(
 		Description: "生成一份新的内容简报。返回简报ID和摘要。",
 		Parameters:  map[string]any{},
 		Execute: func(ctx context.Context, args map[string]any) (string, error) {
-			id, err := briefingSvc.GenerateAsync(ctx, 1) // userID 从 ctx 取，暂时硬编码
+			id, err := briefingSvc.GenerateAsync(ctx, getUserID(ctx))
 			if err != nil {
 				return "", err
 			}
@@ -71,7 +78,7 @@ func RegisterAllTools(
 		},
 		Execute: func(ctx context.Context, args map[string]any) (string, error) {
 			limit := getInt(args, "limit", 5)
-			list, _, err := briefingRepo.List(1, 1, limit)
+			list, _, err := briefingRepo.List(getUserID(ctx), 1, limit)
 			if err != nil {
 				return "", err
 			}
@@ -121,7 +128,7 @@ func RegisterAllTools(
 		Description: "查看当前用户的偏好设置。",
 		Parameters:  map[string]any{},
 		Execute: func(ctx context.Context, args map[string]any) (string, error) {
-			p, err := prefRepo.Get(1)
+			p, err := prefRepo.Get(getUserID(ctx))
 			if err != nil {
 				return "", err
 			}

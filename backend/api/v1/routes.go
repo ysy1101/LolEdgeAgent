@@ -1,6 +1,7 @@
 package v1
 
 import (
+	"context"
 	"log/slog"
 
 	"loledgeagent/internal/agent"
@@ -142,7 +143,8 @@ func RegisterRoutes(r *gin.Engine, db *gorm.DB, logger *slog.Logger) {
 				c.JSON(400, gin.H{"code": 400, "message": err.Error()})
 				return
 			}
-			reply, err := aiAgent.Run(c.Request.Context(), body.History, body.Message)
+			ctx := context.WithValue(c.Request.Context(), "user_id", c.GetUint("user_id"))
+			reply, err := aiAgent.Run(ctx, body.History, body.Message)
 			if err != nil {
 				c.JSON(500, gin.H{"code": 500, "message": err.Error()})
 				return
