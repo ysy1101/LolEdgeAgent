@@ -1,7 +1,14 @@
-import { NavLink } from 'react-router';
-import { FileText, Radio, Settings, Zap, RefreshCw, MessageSquare } from 'lucide-react';
+import { NavLink, useNavigate } from 'react-router';
+import { FileText, Radio, Settings, Zap, RefreshCw, MessageSquare, LogOut } from 'lucide-react';
 
 export function Sidebar() {
+  const navigate = useNavigate();
+  const handleLogout = () => {
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
+    navigate('/login');
+  };
+
   return (
     <aside className="flex h-full w-56 flex-col border-r border-gray-200 bg-gray-50">
       <div className="flex h-14 items-center gap-2 border-b border-gray-200 px-4">
@@ -16,7 +23,7 @@ export function Sidebar() {
         <NavItem to="/preferences" icon={<Settings className="h-4 w-4" />} label="偏好设置" />
       </nav>
 
-      <div className="border-t border-gray-200 p-3">
+      <div className="border-t border-gray-200 p-3 space-y-2">
         <a
           href="/briefings"
           className="flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700 transition-colors"
@@ -24,6 +31,13 @@ export function Sidebar() {
           <RefreshCw className="h-4 w-4" />
           生成简报
         </a>
+        <button
+          onClick={handleLogout}
+          className="flex w-full items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-gray-500 hover:bg-gray-100 transition-colors"
+        >
+          <LogOut className="h-4 w-4" />
+          退出登录
+        </button>
       </div>
     </aside>
   );
