@@ -76,14 +76,19 @@ export default function Chat() {
       body: JSON.stringify({ role: 'user', content: q }),
     });
 
+    // 构建历史上下文（最近 10 轮）
+    const history = messages.slice(-20).map(m => ({
+      role: m.role,
+      content: m.content,
+    }));
+
     try {
-      const res = await fetch('/api/v1/ask', {
+      const res = await fetch('/api/v1/agent/chat', {
         method: 'POST', headers: headers(),
-        body: JSON.stringify({ question: q, top_k: 5 }),
+        body: JSON.stringify({ message: q, history }),
       });
       const json = await res.json();
-      const answer = json.data?.answer || '回答失败';
-      const articles = json.data?.articles || [];
+      const answer = json.data?.content || '回答失败';
 
       // 保存 AI 回复
       await fetch(`/api/v1/conversations/${convId}/messages`, {
@@ -91,7 +96,7 @@ export default function Chat() {
         body: JSON.stringify({ role: 'assistant', content: answer }),
       });
 
-      const aiMsg: Message = { role: 'assistant', content: answer, articles };
+      const aiMsg: Message = { role: 'assistant', content: answer };
       setMessages(prev => [...prev, aiMsg]);
     } catch {
       setMessages(prev => [...prev, { role: 'assistant', content: '请求失败' }]);
