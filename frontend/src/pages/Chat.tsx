@@ -88,7 +88,9 @@ export default function Chat() {
         body: JSON.stringify({ message: q, history }),
       });
       const json = await res.json();
-      const answer = json.data?.content || json.data?.Content || '回答失败';
+      let answer = json.data?.content || json.data?.Content || '回答失败';
+      // 如果 LLM 返回的是 JSON 包裹，提取真正的文本
+      answer = unwrapJSON(answer);
 
       // 保存 AI 回复
       await fetch(`/api/v1/conversations/${convId}/messages`, {
@@ -175,4 +177,14 @@ export default function Chat() {
 
 function tryParseArticles(_content: string): Article[] | undefined {
   return undefined;
+}
+
+// 提取 LLM JSON 回复中的真实文本
+function unwrapJSON(text: string): string {
+  try {
+    const obj = JSON.parse(text);
+    if (obj.content && typeof obj.content === 'string') return obj.content;
+    if (obj.type === 'final' && obj.content) return obj.content;
+  } catch {}
+  return text;
 }
