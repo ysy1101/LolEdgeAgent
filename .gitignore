@@ -1,0 +1,8 @@
+# Database
+*.db
+
+# Environment
+.env
+
+# IDE / Editor
+.claude/
