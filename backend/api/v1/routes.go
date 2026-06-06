@@ -3,6 +3,7 @@ package v1
 import (
 	"log/slog"
 
+	"loledgeagent/internal/agent"
 	"loledgeagent/internal/handler"
 	"loledgeagent/internal/llm"
 	"loledgeagent/internal/middleware"
@@ -114,6 +115,28 @@ func RegisterRoutes(r *gin.Engine, db *gorm.DB, logger *slog.Logger) {
 		prefH := handler.NewPreferenceHandler(prefRepo)
 		protected.GET("/preferences", prefH.Get)
 		protected.PUT("/preferences", prefH.Update)
+
+		// Agent 工具注册
+		agent.RegisterAllTools(articleRepo, briefingSvc, ragSvc, prefRepo, briefingRepo)
+
+		// Agent 对话
+		aiAgent := agent.New(llmClient, logger)
+		protected.POST("/agent/chat", func(c *gin.Context) {
+			var body struct {
+				Message string           `json:"message"`
+				History []agent.Message  `json:"history"`
+			}
+			if err := c.ShouldBindJSON(&body); err != nil {
+				c.JSON(400, gin.H{"code": 400, "message": err.Error()})
+				return
+			}
+			reply, err := aiAgent.Run(c.Request.Context(), body.History, body.Message)
+			if err != nil {
+				c.JSON(500, gin.H{"code": 500, "message": err.Error()})
+				return
+			}
+			c.JSON(200, gin.H{"code": 0, "message": "success", "data": reply})
+		})
 
 		// RAG 问答（需要 LLM key）
 		ragSvc = service.NewRAGService(embRepo, articleRepo, llmClient, logger)
