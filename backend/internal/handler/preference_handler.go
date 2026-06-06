@@ -1,7 +1,9 @@
 package handler
 
 import (
+	"encoding/json"
 	"net/http"
+	"strings"
 
 	"loledgeagent/internal/repository"
 
@@ -39,18 +41,34 @@ func (h *PreferenceHandler) Update(c *gin.Context) {
 	if userID == 0 {
 		userID = 1
 	}
-	p, err := h.repo.Get(userID)
+	current, err := h.repo.Get(userID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "message": err.Error()})
 		return
 	}
-	if err := c.ShouldBindJSON(p); err != nil {
+
+	var input map[string]any
+	if err := c.ShouldBindJSON(&input); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": err.Error()})
 		return
 	}
-	if err := h.repo.Update(userID, p); err != nil {
+
+	// 如果前端传来的 api_key 包含 ****，说明是脱敏值，不更新
+	if v, ok := input["llm_api_key"].(string); ok && strings.Contains(v, "****") {
+		delete(input, "llm_api_key")
+	}
+
+	// 转回 struct 更新
+	data, _ := json.Marshal(input)
+	json.Unmarshal(data, current)
+
+	if err := h.repo.Update(userID, current); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "message": err.Error()})
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success", "data": p})
+	// 返回时脱敏
+	if len(current.LLMAPIKey) > 4 {
+		current.LLMAPIKey = current.LLMAPIKey[:4] + "****"
+	}
+	c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success", "data": current})
 }
