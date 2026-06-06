@@ -30,18 +30,30 @@ func RegisterRoutes(r *gin.Engine, db *gorm.DB, logger *slog.Logger) {
 	embRepo := repository.NewEmbeddingRepo(db)
 
 	// LLM client（如果未配置 API Key，client 为 nil，管线走降级逻辑）
-	llmCfg := llm.LoadConfig()
-	defaultPref, _ := prefRepo.Get(1)
+	llmCfg := llm.LoadConfig()       // 环境变量优先
+	defaultPref, _ := prefRepo.Get(1) // DB 补充
+
+	// API key：环境变量 > DB
 	if llmCfg.APIKey == "" && defaultPref != nil && defaultPref.LLMAPIKey != "" {
 		llmCfg.APIKey = defaultPref.LLMAPIKey
-		llmCfg.BaseURL = defaultPref.LLMBaseURL
-		llmCfg.Model = defaultPref.LLMModel
 	}
-	if defaultPref != nil && defaultPref.LLMAPIKey == "" && llmCfg.APIKey != "" {
-		defaultPref.LLMAPIKey = llmCfg.APIKey
-		defaultPref.LLMBaseURL = llmCfg.BaseURL
-		defaultPref.LLMModel = llmCfg.Model
-		_ = prefRepo.Update(1, defaultPref)
+	// Model 和 BaseURL：DB 有值且环境变量未设时用 DB
+	if defaultPref != nil {
+		if llmCfg.Model == "" || llmCfg.Model == "deepseek-chat" {
+			if defaultPref.LLMModel != "" {
+				llmCfg.Model = defaultPref.LLMModel
+			}
+		}
+		if llmCfg.BaseURL == "" && defaultPref.LLMBaseURL != "" {
+			llmCfg.BaseURL = defaultPref.LLMBaseURL
+		}
+		// 同步：DB 空时存环境变量值
+		if defaultPref.LLMAPIKey == "" && llmCfg.APIKey != "" {
+			defaultPref.LLMAPIKey = llmCfg.APIKey
+			defaultPref.LLMBaseURL = llmCfg.BaseURL
+			defaultPref.LLMModel = llmCfg.Model
+			_ = prefRepo.Update(1, defaultPref)
+		}
 	}
 	var llmClient *llm.Client
 	if llmCfg.APIKey != "" {
