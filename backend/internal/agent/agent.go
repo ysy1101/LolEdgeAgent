@@ -25,8 +25,8 @@ type LLMResponse struct {
 }
 
 type Reply struct {
-	Content    string
-	ToolCalled string
+	Content    string `json:"content"`
+	ToolCalled string `json:"tool_called"`
 }
 
 type Agent struct {
@@ -79,10 +79,11 @@ func (a *Agent) Run(ctx context.Context, history []Message, userMsg string) (*Re
 
 		resp, err := a.parseResponse(raw)
 		if err != nil || resp.Type == "" {
+			// LLM 没按 JSON 回复，直接作为最终回答
 			return &Reply{Content: raw}, nil
 		}
 
-		if resp.Type == "final" {
+		if resp.Type == "final" || resp.Type == "answer" {
 			return &Reply{Content: resp.Content}, nil
 		}
 

@@ -88,7 +88,7 @@ export default function Chat() {
         body: JSON.stringify({ message: q, history }),
       });
       const json = await res.json();
-      const answer = json.data?.content || '回答失败';
+      const answer = json.data?.content || json.data?.Content || '回答失败';
 
       // 保存 AI 回复
       await fetch(`/api/v1/conversations/${convId}/messages`, {
