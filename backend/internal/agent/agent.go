@@ -37,38 +37,47 @@ func New(client *llm.Client, logger *slog.Logger) *Agent {
 	return &Agent{llmClient: client, logger: logger}
 }
 
+// Run 执行 Agent 对话（发送多轮消息，支持工具调用）
 func (a *Agent) Run(ctx context.Context, history []Message, userMsg string) (*Reply, error) {
 	if a.llmClient == nil {
 		return &Reply{Content: "LLM 未配置，请先在偏好设置中配置 API Key。"}, nil
 	}
 
-	// ① 构建初始 messages
-	messages := []Message{
-		{Role: "system", Content: a.systemPrompt()},
-	}
-	messages = append(messages, history...)
-	messages = append(messages, Message{Role: "user", Content: userMsg})
+	// 系统提示
+	system := a.systemPrompt()
 
-	// ② 循环
+	// 历史消息压缩
+	var userContent string
+	for _, m := range history {
+		userContent += fmt.Sprintf("%s: %s\n", m.Role, m.Content)
+	}
+	if userContent != "" {
+		system += "\n\n## 对话历史\n" + userContent
+	}
+
+	// LLM 调用（聊天类问题直接回答）
+	if !a.needsTools(userMsg) {
+		raw, err := a.llmClient.Chat(ctx, system, userMsg)
+		if err != nil {
+			return nil, fmt.Errorf("llm call: %w", err)
+		}
+		return &Reply{Content: raw}, nil
+	}
+
+	// 需要工具 → 循环
+	messages := []llm.ChatMessage{{Role: "system", Content: system}, {Role: "user", Content: userMsg}}
+
 	for round := 0; round < maxRounds; round++ {
 		a.logger.Info("agent round", "round", round+1)
 
-		// 把 messages 转成 LLM 格式
-		var llmMsgs []string
-		for _, m := range messages {
-			llmMsgs = append(llmMsgs, fmt.Sprintf("[%s] %s", m.Role, m.Content))
-		}
-
-		// 调 LLM
-		raw, err := a.llmClient.Chat(ctx, a.chatSystem(), a.chatUser(llmMsgs))
+		// 调 LLM（多轮消息）
+		raw, err := a.llmClient.ChatMessages(ctx, messages)
 		if err != nil {
 			return nil, fmt.Errorf("llm call: %w", err)
 		}
 
-		// 解析 LLM 响应
 		resp, err := a.parseResponse(raw)
-		if err != nil {
-			// 解析失败，当成最终回答
+		if err != nil || resp.Type == "" {
 			return &Reply{Content: raw}, nil
 		}
 
@@ -80,8 +89,8 @@ func (a *Agent) Run(ctx context.Context, history []Message, userMsg string) (*Re
 		tool, err := Get(resp.ToolName)
 		if err != nil {
 			messages = append(messages,
-				Message{Role: "assistant", Content: raw},
-				Message{Role: "tool", Content: fmt.Sprintf("工具不存在: %s", resp.ToolName)},
+				llm.ChatMessage{Role: "assistant", Content: raw},
+				llm.ChatMessage{Role: "user", Content: fmt.Sprintf("工具 %s 不存在，请选择其他方式回答", resp.ToolName)},
 			)
 			continue
 		}
@@ -89,26 +98,55 @@ func (a *Agent) Run(ctx context.Context, history []Message, userMsg string) (*Re
 		a.logger.Info("agent tool call", "tool", resp.ToolName)
 		result, execErr := tool.Execute(ctx, resp.Args)
 		if execErr != nil {
-			result = fmt.Sprintf("工具执行失败: %s", execErr.Error())
+			result = fmt.Sprintf("错误: %s", execErr.Error())
 		}
 
 		messages = append(messages,
-			Message{Role: "assistant", Content: fmt.Sprintf("调用工具: %s", resp.ToolName)},
-			Message{Role: "tool", Content: result},
+			llm.ChatMessage{Role: "assistant", Content: raw},
+			llm.ChatMessage{Role: "user", Content: fmt.Sprintf("工具 %s 返回: %s", resp.ToolName, result)},
 		)
 	}
 
 	return &Reply{Content: "抱歉，处理超时，请简化问题重试。"}, nil
 }
 
-func (a *Agent) parseResponse(raw string) (*LLMResponse, error) {
-	// 提取 JSON（可能在 ```json``` 代码块中）
-	s := raw
-	if len(s) > 7 && s[:7] == "```json" {
-		s = s[7:]
-		if i := len(s) - 3; i > 0 && s[i:] == "```" {
-			s = s[:i]
+
+// needsTools 简单判断是否需要调用工具
+func (a *Agent) needsTools(msg string) bool {
+	keywords := []string{"搜索", "文章", "简报", "偏好", "生成", "找", "帮我", "今天", "最近"}
+	for _, k := range keywords {
+		if contains(msg, k) {
+			return true
 		}
+	}
+	return false
+}
+
+func contains(s, sub string) bool {
+	for i := 0; i <= len(s)-len(sub); i++ {
+		if s[i:i+len(sub)] == sub {
+			return true
+		}
+	}
+	return false
+}
+
+func (a *Agent) parseResponse(raw string) (*LLMResponse, error) {
+	s := raw
+	// 去掉 ```json``` 包裹
+	if len(s) > 7 && (s[:7] == "```json" || s[:7] == "```JSON") {
+		s = s[7:]
+		if idx := lastIndex(s, "```"); idx >= 0 {
+			s = s[:idx]
+		}
+	}
+	s = trim(s)
+	// 找到第一个 { 开始解析
+	idx := 0
+	for ; idx < len(s) && s[idx] != '{'; idx++ {
+	}
+	if idx > 0 {
+		s = s[idx:]
 	}
 	var resp LLMResponse
 	if err := json.Unmarshal([]byte(s), &resp); err != nil {
@@ -117,17 +155,23 @@ func (a *Agent) parseResponse(raw string) (*LLMResponse, error) {
 	return &resp, nil
 }
 
-func (a *Agent) chatSystem() string {
-	return "你是一个 JSON 响应机器人。你的每次回复必须是严格的 JSON 格式，不包含任何其他文字。"
+func lastIndex(s, sub string) int {
+	for i := len(s) - len(sub); i >= 0; i-- {
+		if s[i:i+len(sub)] == sub {
+			return i
+		}
+	}
+	return -1
 }
 
-func (a *Agent) chatUser(llmMsgs []string) string {
-	content := ""
-	for _, m := range llmMsgs {
-		content += m + "\n"
+func trim(s string) string {
+	for len(s) > 0 && (s[0] == ' ' || s[0] == '\n' || s[0] == '\r' || s[0] == '\t') {
+		s = s[1:]
 	}
-	content += "\n现在请根据以上对话决定下一步。只回复 JSON。"
-	return content
+	for len(s) > 0 && (s[len(s)-1] == ' ' || s[len(s)-1] == '\n' || s[len(s)-1] == '\r' || s[len(s)-1] == '\t') {
+		s = s[:len(s)-1]
+	}
+	return s
 }
 
 func (a *Agent) systemPrompt() string {

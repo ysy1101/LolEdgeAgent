@@ -58,10 +58,12 @@ func NewClient(cfg Config) *Client {
 	}
 }
 
-type chatMessage struct {
+type ChatMessage struct {
 	Role    string `json:"role"`
 	Content string `json:"content"`
 }
+
+type chatMessage = ChatMessage
 
 type chatRequest struct {
 	Model    string        `json:"model"`
@@ -131,6 +133,15 @@ func (c *Client) doChat(ctx context.Context, body chatRequest) (string, error) {
 		return "", fmt.Errorf("empty response")
 	}
 	return normalizeJSON(cr.Choices[0].Message.Content), nil
+}
+
+// ChatMessages 发送多轮消息（用于 Agent 工具调用循环）
+func (c *Client) ChatMessages(ctx context.Context, msgs []ChatMessage) (string, error) {
+	req := chatRequest{Model: c.model, Messages: make([]chatMessage, len(msgs))}
+	for i, m := range msgs {
+		req.Messages[i] = chatMessage{Role: m.Role, Content: m.Content}
+	}
+	return c.doChat(ctx, req)
 }
 
 // Embeddings 调用 embedding API 获取文本向量
