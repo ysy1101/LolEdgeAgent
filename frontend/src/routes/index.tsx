@@ -10,7 +10,7 @@ import NotFound from '../pages/NotFound';
 export const router = createBrowserRouter([
   {
     path: '/',
-    element: <DashboardLayout />,
+    Component: DashboardLayout,
     children: [
       { index: true, element: <Navigate to="/chat" replace /> },
       { path: 'chat', element: <Chat /> },
