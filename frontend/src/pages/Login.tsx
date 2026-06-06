@@ -60,13 +60,16 @@ export default function Login() {
 
         <form onSubmit={handleSubmit} className="space-y-3">
           <input className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-            placeholder="用户名" value={username} onChange={e => setUsername(e.target.value)} required />
+            placeholder="用户名" autoComplete="username"
+            value={username} onChange={e => setUsername(e.target.value)} required />
           {tab === 'register' && (
             <input className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-              placeholder="邮箱（可选）" type="email" value={email} onChange={e => setEmail(e.target.value)} />
+              placeholder="邮箱（可选）" type="email" autoComplete="email"
+              value={email} onChange={e => setEmail(e.target.value)} />
           )}
           <input className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-            placeholder="密码" type="password" value={password} onChange={e => setPassword(e.target.value)} required />
+            placeholder="密码" type="password" autoComplete={tab === 'register' ? 'new-password' : 'current-password'}
+            value={password} onChange={e => setPassword(e.target.value)} required />
 
           {error && <p className="text-xs text-red-600">{error}</p>}
 
