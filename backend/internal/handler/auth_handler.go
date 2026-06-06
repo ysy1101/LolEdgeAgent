@@ -45,6 +45,16 @@ func (h *AuthHandler) Register(c *gin.Context) {
 	// 检查用户名是否已存在
 	var exist models.User
 	if h.db.Where("username = ?", req.Username).First(&exist).Error == nil {
+		// 旧版自动创建的 admin 无密码，允许补设
+		if exist.PasswordHash == "" {
+			hash, _ := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
+			h.db.Model(&exist).Updates(map[string]any{"password_hash": hash, "email": req.Email})
+			token, _ := generateToken(&exist)
+			c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success", "data": gin.H{
+				"token": token, "user": gin.H{"id": exist.ID, "username": exist.Username},
+			}})
+			return
+		}
 		c.JSON(http.StatusConflict, gin.H{"code": 409, "message": "用户名已存在"})
 		return
 	}
@@ -102,6 +112,15 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success", "data": gin.H{
 		"token": token,
 		"user":  gin.H{"id": user.ID, "username": user.Username},
+	}})
+}
+
+// Verify 验证 token 是否有效
+func (h *AuthHandler) Verify(c *gin.Context) {
+	userID := c.GetUint("user_id")
+	c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success", "data": gin.H{
+		"user_id": userID,
+		"valid":   true,
 	}})
 }
 

@@ -70,6 +70,9 @@ func RegisterRoutes(r *gin.Engine, db *gorm.DB, logger *slog.Logger) {
 		authH := handler.NewAuthHandler(db)
 		api.POST("/auth/register", authH.Register)
 		api.POST("/auth/login", authH.Login)
+
+		// token 验证（需要登录）
+		api.GET("/auth/verify", middleware.AuthRequired(), authH.Verify)
 	}
 
 	// 以下需要登录

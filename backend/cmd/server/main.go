@@ -33,10 +33,8 @@ func main() {
 		&models.ArticleEmbedding{},
 	)
 
-	// 默认用户（MVP 阶段硬编码）
-	defaultUser := &models.User{Username: "admin", Email: "admin@loledgeagent.local"}
-	db.FirstOrCreate(defaultUser, models.User{Username: "admin"})
-	db.FirstOrCreate(&models.Preference{}, models.Preference{UserID: defaultUser.ID})
+	// 旧版 admin 用户无密码，允许后续注册覆盖
+	// （注册时：存在但无密码 → 设置密码；不存在 → 新建）
 
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
 	logger.Info("database initialized", "path", cfg.Database.Path)
