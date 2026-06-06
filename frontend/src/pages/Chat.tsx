@@ -60,9 +60,6 @@ export default function Chat() {
     loadConvs();
   };
 
-  // 首次进入自动创建对话
-  useEffect(() => { if (convs.length === 0 && convId === null) newConv(); }, [convs]);
-
   // 发送消息
   const send = async () => {
     const q = input.trim();
