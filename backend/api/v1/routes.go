@@ -62,39 +62,48 @@ func RegisterRoutes(r *gin.Engine, db *gorm.DB, logger *slog.Logger) {
 	// ---- 路由 ----
 	api := r.Group("/api/v1")
 	{
-		// 健康检查
+		// 健康检查（公开）
 		healthH := handler.NewHealthHandler(db)
 		api.GET("/health", healthH.Check)
 
+		// 认证（公开）
+		authH := handler.NewAuthHandler(db)
+		api.POST("/auth/register", authH.Register)
+		api.POST("/auth/login", authH.Login)
+	}
+
+	// 以下需要登录
+	protected := api.Group("", middleware.AuthRequired())
+	{
 		// 源管理
 		sourceH := handler.NewSourceHandler(sourceRepo, fetchSvc)
-		api.GET("/sources", sourceH.List)
-		api.POST("/sources", sourceH.Create)
-		api.GET("/sources/:id", sourceH.Get)
-		api.PUT("/sources/:id", sourceH.Update)
-		api.DELETE("/sources/:id", sourceH.Delete)
-		api.POST("/sources/:id/fetch", sourceH.Fetch)
+		protected.GET("/sources", sourceH.List)
+		protected.POST("/sources", sourceH.Create)
+		protected.GET("/sources/:id", sourceH.Get)
+		protected.PUT("/sources/:id", sourceH.Update)
+		protected.DELETE("/sources/:id", sourceH.Delete)
+		protected.POST("/sources/:id/fetch", sourceH.Fetch)
 
 		// 文章
 		articleH := handler.NewArticleHandler(articleRepo, fetchSvc)
-		api.GET("/articles", articleH.List)
-		api.POST("/articles/fetch", articleH.FetchAll)
+		protected.GET("/articles", articleH.List)
+		protected.POST("/articles/fetch", articleH.FetchAll)
 
 		// 简报
 		briefingH := handler.NewBriefingHandler(briefingSvc)
-		api.GET("/briefings", briefingH.List)
-		api.POST("/briefings/generate", briefingH.Generate)
-		api.GET("/briefings/:id", briefingH.Get)
-		api.DELETE("/briefings/:id", briefingH.Delete)
+		protected.GET("/briefings", briefingH.List)
+		protected.POST("/briefings/generate", briefingH.Generate)
+		protected.GET("/briefings/:id", briefingH.Get)
+		protected.DELETE("/briefings/:id", briefingH.Delete)
 
 		// 偏好设置
 		prefH := handler.NewPreferenceHandler(prefRepo)
-		api.GET("/preferences", prefH.Get)
-		api.PUT("/preferences", prefH.Update)
+		protected.GET("/preferences", prefH.Get)
+		protected.PUT("/preferences", prefH.Update)
 
 		// RAG 问答（需要 LLM key）
 		ragSvc := service.NewRAGService(embRepo, articleRepo, llmClient, logger)
-		api.POST("/search", func(c *gin.Context) {
+		protected.POST("/search", func(c *gin.Context) {
 			var body struct {
 				Query string `json:"query"`
 				TopK  int    `json:"top_k"`
