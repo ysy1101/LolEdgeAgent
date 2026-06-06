@@ -22,8 +22,8 @@ export function Button({
   return <button className={`${base} ${variants[variant]} ${className}`} {...props}>{children}</button>;
 }
 
-export function Card({ children, className = '' }: { children: React.ReactNode; className?: string }) {
-  return <div className={`rounded-xl border border-gray-200 bg-white p-4 shadow-sm ${className}`}>{children}</div>;
+export function Card({ children, className = '', ...props }: { children: React.ReactNode; className?: string } & React.HTMLAttributes<HTMLDivElement>) {
+  return <div className={`rounded-xl border border-gray-200 bg-white p-4 shadow-sm ${className}`} {...props}>{children}</div>;
 }
 
 export function Badge({ children, color = 'gray' }: { children: React.ReactNode; color?: 'gray' | 'green' | 'red' | 'blue' }) {
