@@ -56,16 +56,7 @@ func (a *Agent) Run(ctx context.Context, history []Message, userMsg string) (*Re
 		system += "\n\n## 对话历史\n" + userContent
 	}
 
-	// LLM 调用（聊天类问题直接回答）
-	if !a.needsTools(userMsg) {
-		raw, err := a.llmClient.Chat(ctx, system, userMsg)
-		if err != nil {
-			return nil, fmt.Errorf("llm call: %w", err)
-		}
-		return &Reply{Content: raw}, nil
-	}
-
-	// 需要工具 → 循环
+	// Agent 循环（LLM 自主决定是否用工具）
 	messages := []llm.ChatMessage{{Role: "system", Content: system}, {Role: "user", Content: userMsg}}
 
 	for round := 0; round < maxRounds; round++ {
@@ -116,26 +107,6 @@ func (a *Agent) Run(ctx context.Context, history []Message, userMsg string) (*Re
 	return &Reply{Content: "抱歉，处理超时，请简化问题重试。"}, nil
 }
 
-
-// needsTools 简单判断是否需要调用工具
-func (a *Agent) needsTools(msg string) bool {
-	keywords := []string{"搜索", "文章", "简报", "偏好", "生成", "找", "帮我", "今天", "最近"}
-	for _, k := range keywords {
-		if contains(msg, k) {
-			return true
-		}
-	}
-	return false
-}
-
-func contains(s, sub string) bool {
-	for i := 0; i <= len(s)-len(sub); i++ {
-		if s[i:i+len(sub)] == sub {
-			return true
-		}
-	}
-	return false
-}
 
 func (a *Agent) parseResponse(raw string) (*LLMResponse, error) {
 	s := strings.TrimSpace(raw)
