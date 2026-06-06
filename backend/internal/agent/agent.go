@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"strings"
+	"time"
 
 	"loledgeagent/internal/llm"
 )
@@ -72,8 +73,13 @@ func (a *Agent) Run(ctx context.Context, history []Message, userMsg string) (*Re
 		messages = a.trimContext(messages)
 
 		// 调 LLM（多轮消息）
-		raw, err := a.llmClient.ChatMessages(ctx, messages)
+		llmCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+		raw, err := a.llmClient.ChatMessages(llmCtx, messages)
+		cancel()
 		if err != nil {
+			if strings.Contains(err.Error(), "timeout") || strings.Contains(err.Error(), "deadline") {
+				return &Reply{Content: "请求超时，请简化问题后重试。"}, nil
+			}
 			return nil, fmt.Errorf("llm call: %w", err)
 		}
 
