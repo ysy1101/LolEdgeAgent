@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"strings"
 
 	"loledgeagent/internal/llm"
 )
@@ -132,47 +133,39 @@ func contains(s, sub string) bool {
 }
 
 func (a *Agent) parseResponse(raw string) (*LLMResponse, error) {
-	s := raw
+	s := strings.TrimSpace(raw)
+
 	// 去掉 ```json``` 包裹
-	if len(s) > 7 && (s[:7] == "```json" || s[:7] == "```JSON") {
+	if strings.HasPrefix(s, "```json") || strings.HasPrefix(s, "```JSON") {
 		s = s[7:]
-		if idx := lastIndex(s, "```"); idx >= 0 {
+		if idx := strings.LastIndex(s, "```"); idx >= 0 {
 			s = s[:idx]
 		}
+		s = strings.TrimSpace(s)
 	}
-	s = trim(s)
-	// 找到第一个 { 开始解析
-	idx := 0
-	for ; idx < len(s) && s[idx] != '{'; idx++ {
+
+	// 找第一个 { 到最后一个 }
+	start := strings.Index(s, "{")
+	end := strings.LastIndex(s, "}")
+	if start >= 0 && end > start {
+		s = s[start : end+1]
 	}
-	if idx > 0 {
-		s = s[idx:]
-	}
+
 	var resp LLMResponse
 	if err := json.Unmarshal([]byte(s), &resp); err != nil {
+		a.logger.Warn("parse response failed", "raw", raw[:min(100, len(raw))], "error", err)
 		return nil, err
 	}
 	return &resp, nil
 }
 
-func lastIndex(s, sub string) int {
-	for i := len(s) - len(sub); i >= 0; i-- {
-		if s[i:i+len(sub)] == sub {
-			return i
-		}
+func min(a, b int) int {
+	if a < b {
+		return a
 	}
-	return -1
+	return b
 }
 
-func trim(s string) string {
-	for len(s) > 0 && (s[0] == ' ' || s[0] == '\n' || s[0] == '\r' || s[0] == '\t') {
-		s = s[1:]
-	}
-	for len(s) > 0 && (s[len(s)-1] == ' ' || s[len(s)-1] == '\n' || s[len(s)-1] == '\r' || s[len(s)-1] == '\t') {
-		s = s[:len(s)-1]
-	}
-	return s
-}
 
 func (a *Agent) systemPrompt() string {
 	toolsJSON, _ := json.Marshal(ToolDefinitions())
