@@ -99,13 +99,24 @@ func RegisterRoutes(r *gin.Engine, db *gorm.DB, logger *slog.Logger) {
 		protected.GET("/briefings/:id", briefingH.Get)
 		protected.DELETE("/briefings/:id", briefingH.Delete)
 
+		// 对话管理
+		msgRepo := repository.NewMessageRepo(db)
+		convRepo := repository.NewConversationRepo(db)
+		ragSvc := service.NewRAGService(embRepo, articleRepo, llmClient, logger)
+		convH := handler.NewConversationHandler(convRepo, msgRepo, ragSvc)
+		protected.POST("/conversations", convH.Create)
+		protected.GET("/conversations", convH.List)
+		protected.GET("/conversations/:id/messages", convH.GetMessages)
+		protected.POST("/conversations/:id/messages", convH.AddMessage)
+		protected.DELETE("/conversations/:id", convH.Delete)
+
 		// 偏好设置
 		prefH := handler.NewPreferenceHandler(prefRepo)
 		protected.GET("/preferences", prefH.Get)
 		protected.PUT("/preferences", prefH.Update)
 
 		// RAG 问答（需要 LLM key）
-		ragSvc := service.NewRAGService(embRepo, articleRepo, llmClient, logger)
+		ragSvc = service.NewRAGService(embRepo, articleRepo, llmClient, logger)
 		protected.POST("/search", func(c *gin.Context) {
 			var body struct {
 				Query string `json:"query"`

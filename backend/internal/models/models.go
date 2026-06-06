@@ -110,6 +110,28 @@ type FetchLog struct {
 	CompletedAt     *time.Time `json:"completed_at"`
 }
 
+// Conversation 对话会话
+type Conversation struct {
+	ID        uint      `gorm:"primaryKey" json:"id"`
+	UserID    uint      `gorm:"not null;index" json:"user_id"`
+	Title     string    `gorm:"not null;default:'新对话'" json:"title"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
+func (Conversation) TableName() string { return "conversations" }
+
+// ChatMessage 对话消息
+type ChatMessage struct {
+	ID             uint      `gorm:"primaryKey" json:"id"`
+	ConversationID uint      `gorm:"not null;index" json:"conversation_id"`
+	Role           string    `gorm:"not null" json:"role"` // user / assistant
+	Content        string    `gorm:"not null" json:"content"`
+	CreatedAt      time.Time `json:"created_at"`
+}
+
+func (ChatMessage) TableName() string { return "messages" }
+
 // ArticleEmbedding 文章向量
 type ArticleEmbedding struct {
 	ID        uint   `gorm:"primaryKey" json:"id"`

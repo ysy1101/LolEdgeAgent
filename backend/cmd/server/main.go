@@ -31,6 +31,8 @@ func main() {
 		&models.Preference{},
 		&models.FetchLog{},
 		&models.ArticleEmbedding{},
+		&models.Conversation{},
+		&models.ChatMessage{},
 	)
 
 	// 旧版 admin 用户无密码，允许后续注册覆盖
