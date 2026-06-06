@@ -1,10 +1,12 @@
-import type { Source, Briefing, Article, Preferences, Paginated } from '../types';
+import type { Source, Briefing, Article, Preferences, Paginated, ApiResponse } from '../types';
 
 const BASE_URL = '/api/v1';
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
+  const token = localStorage.getItem('token');
+  const authHeader: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
   const res = await fetch(`${BASE_URL}${path}`, {
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    headers: { 'Content-Type': 'application/json', ...authHeader, ...options?.headers },
     ...options,
   });
   const json: ApiResponse<T> = await res.json();
