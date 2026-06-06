@@ -13,7 +13,7 @@ import (
 	"loledgeagent/internal/repository"
 )
 
-// Engine 管线编排器：将已采集的文章加工成简报
+// Engine 管线编排器
 type Engine struct {
 	articleRepo  *repository.ArticleRepo
 	briefingRepo *repository.BriefingRepo
@@ -38,52 +38,14 @@ func NewEngine(
 	}
 }
 
-// RunWithID 核心管线，更新已有的 placeholder briefing
-func (e *Engine) RunWithID(ctx context.Context, briefingID uint, rawArticles []models.Article, userID uint) (*models.Briefing, error) {
-	result, err := e.run(ctx, rawArticles, userID)
-	if err != nil {
-		return nil, err
-	}
-	// 用管线结果更新 placeholder
-	if err := e.briefingRepo.UpdateContent(briefingID, result.Title, result.ContentMarkdown, result.ArticleCount); err != nil {
-		return nil, err
-	}
-	// 删除之前自动创建的 briefing 记录
-	_ = e.briefingRepo.Delete(result.ID)
-
-	result.ID = briefingID
-	return result, nil
-}
-
-// Run 核心管线：去重→排序→摘要→组装→保存（新建 briefing）
-func (e *Engine) Run(ctx context.Context, rawArticles []models.Article, userID uint) (*models.Briefing, error) {
-	return e.run(ctx, rawArticles, userID)
-}
-
-func (e *Engine) run(ctx context.Context, rawArticles []models.Article, userID uint) (*models.Briefing, error) {
-	if len(rawArticles) == 0 {
+// Run 核心管线：排序→摘要→组装→保存
+func (e *Engine) Run(ctx context.Context, articles []models.Article, userID uint) (*models.Briefing, error) {
+	if len(articles) == 0 {
 		return nil, fmt.Errorf("no articles")
 	}
+	e.logger.Info("pipeline: start", "articles", len(articles))
 
-	// ① 去重
-	hashes := make([]string, len(rawArticles))
-	for i, a := range rawArticles {
-		hashes[i] = a.DedupHash
-	}
-	existing, _ := e.articleRepo.FindExistingHashes(hashes)
-	unique := Deduplicate(rawArticles, existing)
-	e.logger.Info("pipeline: dedup", "raw", len(rawArticles), "unique", len(unique))
-
-	if len(unique) == 0 {
-		return nil, fmt.Errorf("no new articles after dedup")
-	}
-
-	// ② 入库
-	if err := e.articleRepo.UpsertBatch(unique); err != nil {
-		return nil, fmt.Errorf("upsert: %w", err)
-	}
-
-	// ③ 加载偏好
+	// ① 加载偏好
 	pref, err := e.prefRepo.Get(userID)
 	if err != nil {
 		return nil, fmt.Errorf("preferences: %w", err)
@@ -91,25 +53,24 @@ func (e *Engine) run(ctx context.Context, rawArticles []models.Article, userID u
 	var keywords []string
 	json.Unmarshal([]byte(pref.Keywords), &keywords)
 
-	// ④ LLM 排名
-	rankInput := buildRankInput(unique)
+	// ② LLM 排名
+	rankInput := buildRankInput(articles)
 	articlesJSON, _ := json.Marshal(rankInput)
 	interestsJSON, _ := json.Marshal(keywords)
 
 	scored, err := llm.RankArticles(ctx, e.llmClient, string(articlesJSON), string(interestsJSON))
 	if err != nil {
 		e.logger.Warn("pipeline: ranking failed", "error", err)
-		scored = defaultRank(unique)
+		scored = defaultRank(articles)
 	}
 
-	// 取 top N
 	maxN := pref.MaxBriefingArticles
 	if maxN <= 0 {
 		maxN = 10
 	}
-	topArticles := e.selectTop(unique, scored, maxN)
+	topArticles := e.selectTop(articles, scored, maxN)
 
-	// ⑤ LLM 摘要
+	// ③ LLM 摘要
 	e.logger.Info("pipeline: summarizing", "count", len(topArticles))
 	summaryInputs := make([]llm.SummaryInput, len(topArticles))
 	for i := range topArticles {
@@ -127,7 +88,7 @@ func (e *Engine) run(ctx context.Context, rawArticles []models.Article, userID u
 		}
 	}
 
-	// ⑥ LLM 组装
+	// ④ LLM 组装
 	assemblyInput := buildAssemblyInput(topArticles, summaries)
 	assemblyJSON, _ := json.Marshal(assemblyInput)
 
@@ -137,7 +98,7 @@ func (e *Engine) run(ctx context.Context, rawArticles []models.Article, userID u
 		markdown = templateBriefing(topArticles, keywords)
 	}
 
-	// ⑦ 保存简报
+	// ⑤ 保存
 	briefing := &models.Briefing{
 		UserID:          userID,
 		Title:           fmt.Sprintf("每日简报 - %s", time.Now().Format("2006-01-02")),
@@ -182,7 +143,13 @@ func (e *Engine) selectTop(articles []models.Article, scored []llm.ScoredArticle
 		ws = append(ws, idxScore{idx: i, score: s})
 	}
 
-	sortIdxScore(ws)
+	for i := 0; i < len(ws); i++ {
+		for j := i + 1; j < len(ws); j++ {
+			if ws[j].score > ws[i].score {
+				ws[i], ws[j] = ws[j], ws[i]
+			}
+		}
+	}
 
 	if maxN > len(articles) {
 		maxN = len(articles)
@@ -192,16 +159,6 @@ func (e *Engine) selectTop(articles []models.Article, scored []llm.ScoredArticle
 		result[i] = articles[ws[i].idx]
 	}
 	return result
-}
-
-func sortIdxScore(ws []idxScore) {
-	for i := 0; i < len(ws); i++ {
-		for j := i + 1; j < len(ws); j++ {
-			if ws[j].score > ws[i].score {
-				ws[i], ws[j] = ws[j], ws[i]
-			}
-		}
-	}
 }
 
 // === helpers ===

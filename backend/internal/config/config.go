@@ -47,8 +47,8 @@ func Load() *Config {
 			Path: resolvePath(envOrDefault("DB_PATH", "./data/loledgeagent.db")),
 		},
 		LLM: LLMConfig{
-			Provider: envOrDefault("LLM_PROVIDER", "openai"),
-			Model:    envOrDefault("LLM_MODEL", "gpt-4.1-mini"),
+			Provider: envOrDefault("LLM_PROVIDER", "deepseek"),
+			Model:    envOrDefault("LLM_MODEL", "deepseek-chat"),
 			APIKey:   os.Getenv("LLM_API_KEY"),
 			BaseURL:  os.Getenv("LLM_BASE_URL"),
 			Timeout:  60,

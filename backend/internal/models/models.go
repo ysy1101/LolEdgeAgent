@@ -89,8 +89,8 @@ type Preference struct {
 	ExcludedKeywords       string    `gorm:"not null;default:'[]'" json:"excluded_keywords"`        // JSON 数组
 	MaxArticlesPerSource   int       `gorm:"not null;default:20" json:"max_articles_per_source"`
 	MaxBriefingArticles    int       `gorm:"not null;default:10" json:"max_briefing_articles"`
-	LLMProvider            string    `gorm:"not null;default:openai" json:"llm_provider"`
-	LLMModel               string    `gorm:"not null;default:gpt-4.1-mini" json:"llm_model"`
+	LLMProvider            string    `gorm:"not null;default:deepseek" json:"llm_provider"`
+	LLMModel               string    `gorm:"not null;default:deepseek-chat" json:"llm_model"`
 	LLMAPIKey              string    `json:"llm_api_key"`
 	LLMBaseURL             string    `json:"llm_base_url"`
 	BriefingSchedule       string    `json:"briefing_schedule"` // cron 表达式，空=手动

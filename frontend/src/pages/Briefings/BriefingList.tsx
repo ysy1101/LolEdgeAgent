@@ -75,6 +75,7 @@ export default function BriefingList() {
             >
               <div>
                 <div className="flex items-center gap-2">
+                  <span className="text-xs text-gray-400">#{b.id}</span>
                   <span className="font-medium text-gray-900">{b.title}</span>
                   <StatusBadge status={b.status} />
                 </div>

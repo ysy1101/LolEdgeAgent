@@ -38,7 +38,7 @@ func baseURLOrDefault() string {
 	if p := os.Getenv("LLM_PROVIDER"); p == "deepseek" {
 		return "https://api.deepseek.com"
 	}
-	return "https://api.openai.com"
+	return "https://api.deepseek.com"
 }
 
 // Client 封装 OpenAI 兼容的 Chat Completions API

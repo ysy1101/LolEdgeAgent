@@ -9,8 +9,8 @@ database:
 
 # LLM 默认配置（可在前端 Preferences 页面覆盖）
 llm:
-  provider: "openai"
-  model: "gpt-4.1-mini"
+  provider: "deepseek"
+  model: "deepseek-chat"
   base_url: ""
   timeout_seconds: 60
 
