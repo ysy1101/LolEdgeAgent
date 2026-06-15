@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router';
 import { api } from '../../lib/api';
 import type { Briefing } from '../../types';
 import { Card, Badge, Spinner } from '../../components/ui';
-import { Plus, Trash2 } from 'lucide-react';
+import { Plus, Trash2, RefreshCw } from 'lucide-react';
 
 export default function BriefingList() {
   const [briefings, setBriefings] = useState<Briefing[]>([]);
@@ -31,6 +31,20 @@ export default function BriefingList() {
     if (!confirm('确定删除此简报？')) return;
     await api.briefings.delete(id);
     load();
+  };
+
+  const handleRetry = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (generating) return;
+    setGenerating(true);
+    try {
+      await api.briefings.generate();
+      await load();
+    } catch (err: any) {
+      alert('重试失败: ' + err.message);
+    } finally {
+      setGenerating(false);
+    }
   };
 
   const handleGenerate = async () => {
@@ -70,24 +84,40 @@ export default function BriefingList() {
           {briefings.map((b) => (
             <Card
               key={b.id}
-              className="flex cursor-pointer items-center justify-between hover:shadow-md transition-shadow"
-              onClick={() => navigate(`/briefings/${b.id}`)}
+              className={`flex items-center justify-between transition-shadow ${
+                b.status === 'completed' ? 'cursor-pointer hover:shadow-md' : 'cursor-default'
+              } ${b.status === 'failed' ? 'border-red-200 bg-red-50/30' : ''}`}
+              onClick={() => b.status === 'completed' && navigate(`/briefings/${b.id}`)}
             >
-              <div>
+              <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2">
                   <span className="text-xs text-gray-400">#{b.id}</span>
-                  <span className="font-medium text-gray-900">{b.title}</span>
+                  <span className="font-medium text-gray-900 truncate">{b.title}</span>
                   <StatusBadge status={b.status} />
                 </div>
-                <p className="mt-1 text-xs text-gray-500">
-                  {b.generated_at} · {b.article_count} 篇文章
-                </p>
+                {b.status === 'failed' && b.error_message ? (
+                  <p className="mt-1 text-xs text-red-600">{b.error_message}</p>
+                ) : (
+                  <p className="mt-1 text-xs text-gray-500">
+                    {b.generated_at} · {b.article_count} 篇文章
+                  </p>
+                )}
               </div>
-              <button onClick={(e) => handleDelete(e, b.id)}
-                className="rounded p-1.5 text-gray-400 hover:bg-red-50 hover:text-red-600"
-                title="删除">
-                <Trash2 className="h-4 w-4" />
-              </button>
+              <div className="flex items-center gap-1 ml-2">
+                {b.status === 'failed' && (
+                  <button onClick={(e) => handleRetry(e)}
+                    className="rounded p-1.5 text-gray-400 hover:bg-blue-50 hover:text-blue-600"
+                    disabled={generating}
+                    title="重试">
+                    <RefreshCw className="h-4 w-4" />
+                  </button>
+                )}
+                <button onClick={(e) => handleDelete(e, b.id)}
+                  className="rounded p-1.5 text-gray-400 hover:bg-red-50 hover:text-red-600"
+                  title="删除">
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              </div>
             </Card>
           ))}
         </div>
