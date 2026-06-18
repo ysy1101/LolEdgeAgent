@@ -1,14 +1,14 @@
 package llm
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
-	"fmt"
-	"io"
-	"net/http"
 	"os"
-	"time"
+	"strings"
+
+	"github.com/cloudwego/eino/components/model"
+	openai "github.com/cloudwego/eino-ext/components/model/openai"
+	"github.com/cloudwego/eino/schema"
 )
 
 // Config LLM 配置
@@ -18,7 +18,7 @@ type Config struct {
 	BaseURL string
 }
 
-// LoadConfig 从环境变量加载 LLM 配置
+// LoadConfig 从环境变量加载配置
 func LoadConfig() Config {
 	key := os.Getenv("LLM_API_KEY")
 	if key == "" {
@@ -35,197 +35,86 @@ func baseURLOrDefault() string {
 	if u := os.Getenv("LLM_BASE_URL"); u != "" {
 		return u
 	}
-	if p := os.Getenv("LLM_PROVIDER"); p == "deepseek" {
-		return "https://api.deepseek.com"
-	}
 	return "https://api.deepseek.com"
 }
 
-// Client 封装 OpenAI 兼容的 Chat Completions API
+// Client 封装 Eino ChatModel + HTTP Embedding
 type Client struct {
-	baseURL    string
-	apiKey     string
-	model      string
-	httpClient *http.Client
+	cm     model.ChatModel
+	model  string
+	embCli *EmbeddingClient
 }
 
+// NewClient 创建客户端
 func NewClient(cfg Config) *Client {
+	cm, err := openai.NewChatModel(context.Background(), &openai.ChatModelConfig{
+		Model:   cfg.Model,
+		APIKey:  cfg.APIKey,
+		BaseURL: cfg.BaseURL,
+	})
+	if err != nil {
+		panic("failed to create chat model: " + err.Error())
+	}
 	return &Client{
-		baseURL:    cfg.BaseURL,
-		apiKey:     cfg.APIKey,
-		model:      cfg.Model,
-		httpClient: &http.Client{Timeout: 120 * time.Second},
+		cm:     cm,
+		model:  cfg.Model,
+		embCli: NewEmbeddingClient(cfg),
 	}
 }
 
-type ChatMessage struct {
-	Role    string `json:"role"`
-	Content string `json:"content"`
-}
-
-type chatMessage = ChatMessage
-
-type chatRequest struct {
-	Model    string        `json:"model"`
-	Messages []chatMessage `json:"messages"`
-}
-
-type chatChoice struct {
-	Message chatMessage `json:"message"`
-}
-
-type chatResponse struct {
-	Choices []chatChoice `json:"choices"`
-}
-
-// Chat 发送 system + user 消息，返回 assistant 回复
+// Chat 发送 system + user 消息
 func (c *Client) Chat(ctx context.Context, system, user string) (string, error) {
-	req := chatRequest{
-		Model: c.model,
-		Messages: []chatMessage{
-			{Role: "system", Content: system},
-			{Role: "user", Content: user},
-		},
+	resp, err := c.cm.Generate(ctx, []*schema.Message{
+		schema.SystemMessage(system),
+		schema.UserMessage(user),
+	})
+	if err != nil {
+		return "", err
 	}
-	return c.doChat(ctx, req)
+	return resp.Content, nil
 }
 
-// ChatJSON 发送消息并将回复解析为 JSON 结构体
+// ChatMessages 发送多轮消息
+func (c *Client) ChatMessages(ctx context.Context, msgs []ChatMessage) (string, error) {
+	messages := make([]*schema.Message, len(msgs))
+	for i, m := range msgs {
+		switch m.Role {
+		case "system":
+			messages[i] = schema.SystemMessage(m.Content)
+		case "user":
+			messages[i] = schema.UserMessage(m.Content)
+		case "assistant":
+			messages[i] = schema.AssistantMessage(m.Content, nil)
+		default:
+			messages[i] = schema.UserMessage(m.Content)
+		}
+	}
+	resp, err := c.cm.Generate(ctx, messages)
+	if err != nil {
+		return "", err
+	}
+	return resp.Content, nil
+}
+
+// ChatJSON 发送消息并解析 JSON 回复
 func (c *Client) ChatJSON(ctx context.Context, system, user string, result any) error {
-	content, err := c.Chat(ctx, system, user)
+	raw, err := c.Chat(ctx, system, user)
 	if err != nil {
 		return err
 	}
-	return json.Unmarshal([]byte(content), result)
+	s := NormalizeJSON(raw)
+	return json.Unmarshal([]byte(s), result)
 }
 
-func (c *Client) doChat(ctx context.Context, body chatRequest) (string, error) {
-	jsonBody, _ := json.Marshal(body)
-
-	url := c.baseURL + "/v1/chat/completions"
-	httpReq, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(jsonBody))
-	if err != nil {
-		return "", err
-	}
-	httpReq.Header.Set("Content-Type", "application/json")
-	httpReq.Header.Set("Authorization", "Bearer "+c.apiKey)
-
-	resp, err := c.httpClient.Do(httpReq)
-	if err != nil {
-		return "", fmt.Errorf("http request: %w", err)
-	}
-	defer resp.Body.Close()
-
-	data, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return "", err
-	}
-
-	if resp.StatusCode != 200 {
-		return "", fmt.Errorf("llm api error %d: %s", resp.StatusCode, truncateStr(string(data), 300))
-	}
-
-	var cr chatResponse
-	if err := json.Unmarshal(data, &cr); err != nil {
-		return "", fmt.Errorf("parse response: %w", err)
-	}
-	if len(cr.Choices) == 0 {
-		return "", fmt.Errorf("empty response")
-	}
-	return normalizeJSON(cr.Choices[0].Message.Content), nil
-}
-
-// ChatMessages 发送多轮消息（用于 Agent 工具调用循环）
-func (c *Client) ChatMessages(ctx context.Context, msgs []ChatMessage) (string, error) {
-	req := chatRequest{Model: c.model, Messages: make([]chatMessage, len(msgs))}
-	for i, m := range msgs {
-		req.Messages[i] = chatMessage{Role: m.Role, Content: m.Content}
-	}
-	return c.doChat(ctx, req)
-}
-
-// Embeddings 调用 embedding API 获取文本向量
+// Embeddings 委托给 EmbeddingClient
 func (c *Client) Embeddings(ctx context.Context, texts []string) ([][]float64, error) {
-	type embReq struct {
-		Model string   `json:"model"`
-		Input []string `json:"input"`
-	}
-	type embData struct {
-		Embedding []float64 `json:"embedding"`
-	}
-	type embResp struct {
-		Data []embData `json:"data"`
-	}
-
-	jsonBody, _ := json.Marshal(embReq{Model: c.model, Input: texts})
-	url := c.baseURL + "/v1/embeddings"
-	httpReq, _ := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(jsonBody))
-	httpReq.Header.Set("Content-Type", "application/json")
-	httpReq.Header.Set("Authorization", "Bearer "+c.apiKey)
-
-	resp, err := c.httpClient.Do(httpReq)
-	if err != nil {
-		return nil, fmt.Errorf("embeddings request: %w", err)
-	}
-	defer resp.Body.Close()
-
-	data, _ := io.ReadAll(resp.Body)
-	if resp.StatusCode != 200 {
-		return nil, fmt.Errorf("embeddings api error %d: %s", resp.StatusCode, truncateStr(string(data), 300))
-	}
-
-	var er embResp
-	if err := json.Unmarshal(data, &er); err != nil {
-		return nil, fmt.Errorf("parse embeddings: %w", err)
-	}
-	result := make([][]float64, len(er.Data))
-	for i, d := range er.Data {
-		result[i] = d.Embedding
-	}
-	return result, nil
+	return c.embCli.Embed(ctx, texts)
 }
 
-// normalizeJSON 从 LLM 回复中提取 JSON 数组（去除可能的 markdown 包裹）
-func normalizeJSON(s string) string {
-	s = trimSpace(s)
-	if len(s) >= 6 && s[:7] == "```json" {
-		s = s[7:]
-		if idx := lastIndex(s, "```"); idx >= 0 {
-			s = s[:idx]
-		}
-	} else if len(s) >= 3 && s[:3] == "```" {
-		s = s[3:]
-		if idx := lastIndex(s, "```"); idx >= 0 {
-			s = s[:idx]
-		}
-	}
-	return trimSpace(s)
-}
-
-func trimSpace(s string) string {
-	for len(s) > 0 && (s[0] == ' ' || s[0] == '\n' || s[0] == '\r' || s[0] == '\t') {
-		s = s[1:]
-	}
-	for len(s) > 0 && (s[len(s)-1] == ' ' || s[len(s)-1] == '\n' || s[len(s)-1] == '\r' || s[len(s)-1] == '\t') {
-		s = s[:len(s)-1]
-	}
-	return s
-}
-
-func lastIndex(s, sub string) int {
-	for i := len(s) - len(sub); i >= 0; i-- {
-		if s[i:i+len(sub)] == sub {
-			return i
-		}
-	}
-	return -1
-}
-
-func truncateStr(s string, n int) string {
-	if len(s) <= n {
-		return s
-	}
-	return s[:n] + "..."
+// ChatMessage 消息结构
+type ChatMessage struct {
+	Role    string `json:"role"`
+	Content string `json:"content"`
 }
 
 func envOrDefault(key, def string) string {
@@ -233,4 +122,21 @@ func envOrDefault(key, def string) string {
 		return v
 	}
 	return def
+}
+
+// normalizeJSON 从 LLM 回复中提取 JSON
+func NormalizeJSON(s string) string {
+	s = strings.TrimSpace(s)
+	if len(s) >= 7 && s[:7] == "```json" {
+		s = s[7:]
+		if idx := strings.LastIndex(s, "```"); idx >= 0 {
+			s = s[:idx]
+		}
+	} else if len(s) >= 3 && s[:3] == "```" {
+		s = s[3:]
+		if idx := strings.LastIndex(s, "```"); idx >= 0 {
+			s = s[:idx]
+		}
+	}
+	return strings.TrimSpace(s)
 }
