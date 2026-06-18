@@ -42,6 +42,15 @@ func (h *AuthHandler) Register(c *gin.Context) {
 		return
 	}
 
+	// 检查邮箱是否已存在
+	if req.Email != "" {
+		var emailExist models.User
+		if h.db.Where("email = ?", req.Email).First(&emailExist).Error == nil {
+			c.JSON(http.StatusConflict, gin.H{"code": 409, "message": "邮箱已被注册"})
+			return
+		}
+	}
+
 	// 检查用户名是否已存在
 	var exist models.User
 	if h.db.Where("username = ?", req.Username).First(&exist).Error == nil {
