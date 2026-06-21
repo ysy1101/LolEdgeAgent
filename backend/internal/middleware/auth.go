@@ -8,6 +8,10 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 )
 
+type contextKey string
+
+const UserIDKey contextKey = "user_id"
+
 func jwtSecret() []byte {
 	s := os.Getenv("JWT_SECRET")
 	if s == "" {
@@ -39,7 +43,7 @@ func AuthRequired() gin.HandlerFunc {
 			return
 		}
 
-		c.Set("user_id", uint(claims["user_id"].(float64)))
+		c.Set(string(UserIDKey), uint(claims["user_id"].(float64)))
 		c.Next()
 	}
 }

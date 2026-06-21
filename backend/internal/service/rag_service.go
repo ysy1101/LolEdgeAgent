@@ -33,7 +33,7 @@ func NewRAGService(
 // IndexArticle 为一篇文章生成并存储向量
 func (s *RAGService) IndexArticle(ctx context.Context, article *models.Article) error {
 	if s.llmClient == nil {
-		return fmt.Errorf("llm client not configured")
+		return fmt.Errorf("AI 功能未配置，请先在偏好设置中设置 API Key")
 	}
 	exists, _ := s.embRepo.Exists(article.ID)
 	if exists {
@@ -63,7 +63,7 @@ func (s *RAGService) IndexArticle(ctx context.Context, article *models.Article) 
 // Search 语义搜索文章
 func (s *RAGService) Search(ctx context.Context, query string, topK int) ([]models.Article, error) {
 	if s.llmClient == nil {
-		return nil, fmt.Errorf("llm client not configured")
+		return nil, fmt.Errorf("AI 功能未配置，请先在偏好设置中设置 API Key")
 	}
 
 	// ① 查询向量化

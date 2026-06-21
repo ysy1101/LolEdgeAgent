@@ -30,30 +30,21 @@ func RegisterRoutes(r *gin.Engine, db *gorm.DB, logger *slog.Logger) {
 	fetchSvc := service.NewFetchService(sourceRepo, articleRepo, logRepo, logger)
 	embRepo := repository.NewEmbeddingRepo(db)
 
-	// LLM client（如果未配置 API Key，client 为 nil，管线走降级逻辑）
-	llmCfg := llm.LoadConfig()       // 环境变量优先
-	defaultPref, _ := prefRepo.Get(1) // DB 补充
+	// LLM client（环境变量优先，DB 补充缺失项）
+	llmCfg := llm.LoadConfig()
+	pref, _ := prefRepo.Get(1) // 只读一次，后续复用
 
-	// API key：环境变量 > DB
-	if llmCfg.APIKey == "" && defaultPref != nil && defaultPref.LLMAPIKey != "" {
-		llmCfg.APIKey = defaultPref.LLMAPIKey
-	}
-	// Model 和 BaseURL：DB 有值且环境变量未设时用 DB
-	if defaultPref != nil {
+	if pref != nil {
+		if llmCfg.APIKey == "" && pref.LLMAPIKey != "" {
+			llmCfg.APIKey = pref.LLMAPIKey
+		}
 		if llmCfg.Model == "" || llmCfg.Model == "deepseek-chat" {
-			if defaultPref.LLMModel != "" {
-				llmCfg.Model = defaultPref.LLMModel
+			if pref.LLMModel != "" {
+				llmCfg.Model = pref.LLMModel
 			}
 		}
-		if llmCfg.BaseURL == "" && defaultPref.LLMBaseURL != "" {
-			llmCfg.BaseURL = defaultPref.LLMBaseURL
-		}
-		// 同步：DB 空时存环境变量值
-		if defaultPref.LLMAPIKey == "" && llmCfg.APIKey != "" {
-			defaultPref.LLMAPIKey = llmCfg.APIKey
-			defaultPref.LLMBaseURL = llmCfg.BaseURL
-			defaultPref.LLMModel = llmCfg.Model
-			_ = prefRepo.Update(1, defaultPref)
+		if llmCfg.BaseURL == "" && pref.LLMBaseURL != "" {
+			llmCfg.BaseURL = pref.LLMBaseURL
 		}
 	}
 	var llmClient *llm.Client
@@ -66,10 +57,10 @@ func RegisterRoutes(r *gin.Engine, db *gorm.DB, logger *slog.Logger) {
 
 	// 启动定时调度器
 	sched := scheduler.New(briefingSvc, logger)
-	pref, _ := prefRepo.Get(1)
 	if pref != nil && pref.BriefingSchedule != "" {
 		if err := sched.Start(pref.BriefingSchedule); err != nil {
 			logger.Error("scheduler start failed", "error", err)
+			panic("scheduler start failed: " + err.Error())
 		}
 	}
 
@@ -136,14 +127,14 @@ func RegisterRoutes(r *gin.Engine, db *gorm.DB, logger *slog.Logger) {
 		aiAgent := agent.New(llmClient, logger)
 		protected.POST("/agent/chat", func(c *gin.Context) {
 			var body struct {
-				Message string           `json:"message"`
-				History []agent.Message  `json:"history"`
+				Message string          `json:"message"`
+				History []agent.Message `json:"history"`
 			}
 			if err := c.ShouldBindJSON(&body); err != nil {
 				c.JSON(400, gin.H{"code": 400, "message": err.Error()})
 				return
 			}
-			ctx := context.WithValue(c.Request.Context(), "user_id", c.GetUint("user_id"))
+			ctx := context.WithValue(c.Request.Context(), middleware.UserIDKey, c.GetUint("user_id"))
 			reply, err := aiAgent.Run(ctx, body.History, body.Message)
 			if err != nil {
 				c.JSON(500, gin.H{"code": 500, "message": err.Error()})
@@ -152,9 +143,12 @@ func RegisterRoutes(r *gin.Engine, db *gorm.DB, logger *slog.Logger) {
 			c.JSON(200, gin.H{"code": 0, "message": "success", "data": reply})
 		})
 
-		// RAG 问答（需要 LLM key）
-		ragSvc = service.NewRAGService(embRepo, articleRepo, llmClient, logger)
+		// RAG 语义搜索
 		protected.POST("/search", func(c *gin.Context) {
+			if llmClient == nil {
+				c.JSON(400, gin.H{"code": 400, "message": "AI 功能未配置，请先在偏好设置中设置 API Key"})
+				return
+			}
 			var body struct {
 				Query string `json:"query"`
 				TopK  int    `json:"top_k"`
@@ -174,6 +168,10 @@ func RegisterRoutes(r *gin.Engine, db *gorm.DB, logger *slog.Logger) {
 			c.JSON(200, gin.H{"code": 0, "message": "success", "data": articles})
 		})
 		api.POST("/ask", func(c *gin.Context) {
+			if llmClient == nil {
+				c.JSON(400, gin.H{"code": 400, "message": "AI 功能未配置，请先在偏好设置中设置 API Key"})
+				return
+			}
 			var body struct {
 				Question string `json:"question"`
 				TopK     int    `json:"top_k"`

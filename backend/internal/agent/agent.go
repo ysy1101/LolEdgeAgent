@@ -122,7 +122,6 @@ func (a *Agent) Run(ctx context.Context, history []Message, userMsg string) (*Re
 	return &Reply{Content: "抱歉，处理超时，请简化问题重试。"}, nil
 }
 
-
 // trimContext 截断中间消息，保留 system prompt 和最近轮次
 func (a *Agent) trimContext(msgs []llm.ChatMessage) []llm.ChatMessage {
 	total := 0
@@ -201,10 +200,9 @@ func cleanReply(raw string) string {
 	return strings.TrimSpace(raw)
 }
 
-
 func (a *Agent) systemPrompt() string {
 	toolsJSON, _ := json.Marshal(ToolDefinitions())
-	prompt := `你是 LolEdgeAgent，一个内容聚合和知识助手。
+	prompt := `你是 LolEdgeAgent,一个内容聚合和知识助手。
 
 ## 可用工具
 ` + string(toolsJSON) + `

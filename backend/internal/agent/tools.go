@@ -4,12 +4,13 @@ import (
 	"context"
 	"fmt"
 
+	"loledgeagent/internal/middleware"
 	"loledgeagent/internal/repository"
 	"loledgeagent/internal/service"
 )
 
 func getUserID(ctx context.Context) uint {
-	if id, ok := ctx.Value("user_id").(uint); ok && id > 0 {
+	if id, ok := ctx.Value(middleware.UserIDKey).(uint); ok && id > 0 {
 		return id
 	}
 	return 1
