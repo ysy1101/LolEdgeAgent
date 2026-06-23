@@ -22,7 +22,6 @@ export default function Chat() {
   const token = () => localStorage.getItem('token') || '';
   const headers = () => ({ 'Content-Type': 'application/json', Authorization: `Bearer ${token()}` });
 
-  // 加载对话列表
   const loadConvs = async () => {
     const res = await fetch('/api/v1/conversations', { headers: headers() });
     const json = await res.json();
@@ -30,7 +29,6 @@ export default function Chat() {
   };
   useEffect(() => { loadConvs(); }, []);
 
-  // 新建对话
   const newConv = async () => {
     const res = await fetch('/api/v1/conversations', { method: 'POST', headers: headers() });
     const json = await res.json();
@@ -41,7 +39,6 @@ export default function Chat() {
     }
   };
 
-  // 切换对话
   const switchConv = async (id: number) => {
     setConvId(id);
     const res = await fetch(`/api/v1/conversations/${id}/messages`, { headers: headers() });
@@ -50,12 +47,10 @@ export default function Chat() {
       setMessages(json.data.map((m: any) => ({
         role: m.role,
         content: m.content,
-        articles: m.role === 'assistant' ? tryParseArticles(m.content) : undefined,
       })));
     }
   };
 
-  // 删除对话
   const deleteConv = async (e: React.MouseEvent, id: number) => {
     e.stopPropagation();
     if (!confirm('删除此对话？')) return;
@@ -64,24 +59,27 @@ export default function Chat() {
     loadConvs();
   };
 
-  // 发送消息
+  // 发送消息：先持久化 → 从 DB 取真实历史 → Agent 处理 → 再持久化回复
   const send = async () => {
     const q = input.trim();
     if (!q || loading || !convId) return;
     setInput('');
     setLoading(true);
 
-    const userMsg: Message = { role: 'user', content: q };
-    setMessages(prev => [...prev, userMsg]);
-
-    // 保存用户消息
+    // 1. 先把用户消息落 DB（保证失败也能追溯到用户问了什么）
     await fetch(`/api/v1/conversations/${convId}/messages`, {
       method: 'POST', headers: headers(),
       body: JSON.stringify({ role: 'user', content: q }),
     });
 
-    // 构建历史上下文（最近 10 轮）
-    const history = messages.slice(-20).map(m => ({
+    // 2. 从 DB 取完整历史（真实状态，不依赖 React state 时序）
+    const msgsRes = await fetch(`/api/v1/conversations/${convId}/messages`, { headers: headers() });
+    const msgsJson = await msgsRes.json();
+    const allMsgs: any[] = msgsJson.data || [];
+    setMessages(allMsgs.map((m: any) => ({ role: m.role, content: m.content })));
+
+    // 3. 历史交给 Agent（最近 20 条，不含刚保存的用户消息）
+    const history = allMsgs.slice(0, -1).slice(-20).map((m: any) => ({
       role: m.role,
       content: m.content,
     }));
@@ -92,17 +90,17 @@ export default function Chat() {
         body: JSON.stringify({ message: q, history }),
       });
       const json = await res.json();
-      let answer = json.data?.content || '回答失败';
+      const answer = json.data?.content || '回答失败';
       const steps: Step[] = json.data?.steps || [];
 
-      // 保存 AI 回复（含 steps）
+      // 4. 助手回复落 DB
       await fetch(`/api/v1/conversations/${convId}/messages`, {
         method: 'POST', headers: headers(),
         body: JSON.stringify({ role: 'assistant', content: answer }),
       });
 
-      const aiMsg: Message = { role: 'assistant', content: answer, steps };
-      setMessages(prev => [...prev, aiMsg]);
+      // 5. UI 追加助手消息
+      setMessages(prev => [...prev, { role: 'assistant', content: answer, steps }]);
     } catch {
       setMessages(prev => [...prev, { role: 'assistant', content: '请求失败' }]);
     } finally {
@@ -114,7 +112,6 @@ export default function Chat() {
 
   return (
     <div className="flex h-[calc(100vh-7rem)]">
-      {/* 对话列表侧边 */}
       <div className="w-48 border-r border-gray-200 pr-3 mr-3 overflow-y-auto">
         <button onClick={newConv} className="flex w-full items-center gap-1 rounded-lg px-2 py-1.5 text-xs font-medium text-blue-600 hover:bg-blue-50 mb-2">
           <Plus className="h-3 w-3" /> 新对话
@@ -134,7 +131,6 @@ export default function Chat() {
         ))}
       </div>
 
-      {/* 消息区 */}
       <div className="flex flex-1 flex-col">
         <div className="flex-1 overflow-y-auto space-y-4 pr-2">
           {messages.length === 0 && (
@@ -153,15 +149,6 @@ export default function Chat() {
                   </div>
                 ) : (
                   <p className="whitespace-pre-wrap">{m.content}</p>
-                )}
-                {m.articles && m.articles.length > 0 && (
-                  <div className="mt-2 border-t border-gray-200 pt-2">
-                    <p className="mb-1 text-xs text-gray-500">参考文章：</p>
-                    {m.articles.map(a => (
-                      <a key={a.id} href={a.url} target="_blank" rel="noreferrer"
-                        className="block text-xs text-blue-600 hover:underline truncate">{a.title}</a>
-                    ))}
-                  </div>
                 )}
                 {m.steps && m.steps.length > 0 && (
                   <details className="mt-2 border-t border-gray-200 pt-2">
@@ -203,8 +190,4 @@ export default function Chat() {
       </div>
     </div>
   );
-}
-
-function tryParseArticles(_content: string): Article[] | undefined {
-  return undefined;
 }
