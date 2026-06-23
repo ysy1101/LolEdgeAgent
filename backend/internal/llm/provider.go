@@ -15,9 +15,10 @@ import (
 
 // Config LLM 配置
 type Config struct {
-	Model   string
-	APIKey  string
-	BaseURL string
+	Model          string
+	EmbeddingModel string
+	APIKey         string
+	BaseURL        string
 }
 
 // LoadConfig 从环境变量加载配置
@@ -27,9 +28,10 @@ func LoadConfig() Config {
 		key = os.Getenv("API_KEY")
 	}
 	return Config{
-		Model:   envOrDefault("LLM_MODEL", "deepseek-chat"),
-		APIKey:  key,
-		BaseURL: baseURLOrDefault(),
+		Model:          envOrDefault("LLM_MODEL", "deepseek-chat"),
+		EmbeddingModel: envOrDefault("EMBEDDING_MODEL", "text-embedding-3-small"),
+		APIKey:         key,
+		BaseURL:        baseURLOrDefault(),
 	}
 }
 
@@ -60,7 +62,7 @@ func NewClient(cfg Config) *Client {
 
 	emb, err := openaiembed.NewEmbedder(context.Background(), &openaiembed.EmbeddingConfig{
 		APIKey:  cfg.APIKey,
-		Model:   cfg.Model,
+		Model:   cfg.EmbeddingModel,
 		BaseURL: cfg.BaseURL,
 	})
 	if err != nil {
