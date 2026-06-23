@@ -1,61 +1,42 @@
 package agent
 
 import (
-	"context"
-	"encoding/json"
-	"fmt"
+	"loledgeagent/internal/repository"
+	"loledgeagent/internal/service"
+
+	"github.com/cloudwego/eino/components/tool"
 )
 
-// Tool LLM 可调用的工具
-type Tool struct {
-	Name        string
-	Description string         // 给 LLM 看的功能描述
-	Parameters  map[string]any // JSON Schema 参数定义
-	Execute     func(ctx context.Context, args map[string]any) (string, error)
+var (
+	_articleRepo  *repository.ArticleRepo
+	_briefingSvc  *service.BriefingService
+	_ragSvc       *service.RAGService
+	_prefRepo     *repository.PreferenceRepo
+	_briefingRepo *repository.BriefingRepo
+)
+
+// RegisterAllTools 注册工具依赖（由路由层调用）
+func RegisterAllTools(
+	articleRepo *repository.ArticleRepo,
+	briefingSvc *service.BriefingService,
+	ragSvc *service.RAGService,
+	prefRepo *repository.PreferenceRepo,
+	briefingRepo *repository.BriefingRepo,
+) {
+	_articleRepo = articleRepo
+	_briefingSvc = briefingSvc
+	_ragSvc = ragSvc
+	_prefRepo = prefRepo
+	_briefingRepo = briefingRepo
 }
 
-var registry = map[string]*Tool{}
-
-func Register(t *Tool) {
-	registry[t.Name] = t
-}
-
-func Get(name string) (*Tool, error) {
-	t, ok := registry[name]
-	if !ok {
-		return nil, fmt.Errorf("unknown tool: %s", name)
+// allEinoTools 创建当前注册的所有工具
+func allEinoTools() []tool.InvokableTool {
+	return []tool.InvokableTool{
+		makeSearchArticlesTool(_ragSvc),
+		makeGenerateBriefingTool(_briefingSvc),
+		makeListBriefingsTool(_briefingRepo),
+		makeGetBriefingTool(_briefingRepo),
+		makeGetPreferencesTool(_prefRepo),
 	}
-	return t, nil
-}
-
-func AllTools() []*Tool {
-	var list []*Tool
-	for _, t := range registry {
-		list = append(list, t)
-	}
-	return list
-}
-
-// ToolDef 用于序列化给 LLM 的工具定义
-type ToolDef struct {
-	Name        string         `json:"name"`
-	Description string         `json:"description"`
-	Parameters  map[string]any `json:"parameters"`
-}
-
-func ToolDefinitions() []ToolDef {
-	var defs []ToolDef
-	for _, t := range registry {
-		defs = append(defs, ToolDef{
-			Name:        t.Name,
-			Description: t.Description,
-			Parameters:  t.Parameters,
-		})
-	}
-	return defs
-}
-
-func toolJSON(v any) string {
-	b, _ := json.Marshal(v)
-	return string(b)
 }

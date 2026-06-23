@@ -6,8 +6,10 @@ import (
 	"os"
 	"strings"
 
+	"github.com/cloudwego/eino/components/embedding"
 	"github.com/cloudwego/eino/components/model"
 	openai "github.com/cloudwego/eino-ext/components/model/openai"
+	openaiembed "github.com/cloudwego/eino-ext/components/embedding/openai"
 	"github.com/cloudwego/eino/schema"
 )
 
@@ -38,14 +40,14 @@ func baseURLOrDefault() string {
 	return "https://api.deepseek.com"
 }
 
-// Client 封装 Eino ChatModel + HTTP Embedding
+// Client 封装 Eino ToolCallingChatModel + Embedder
 type Client struct {
-	cm     model.ChatModel
-	model  string
-	embCli *EmbeddingClient
+	chatModel model.ToolCallingChatModel
+	model     string
+	embedder  embedding.Embedder
 }
 
-// NewClient 创建客户端
+// NewClient 创建客户端（ChatModel + Embedder 均通过 Eino）
 func NewClient(cfg Config) *Client {
 	cm, err := openai.NewChatModel(context.Background(), &openai.ChatModelConfig{
 		Model:   cfg.Model,
@@ -55,16 +57,31 @@ func NewClient(cfg Config) *Client {
 	if err != nil {
 		panic("failed to create chat model: " + err.Error())
 	}
-	return &Client{
-		cm:     cm,
-		model:  cfg.Model,
-		embCli: NewEmbeddingClient(cfg),
+
+	emb, err := openaiembed.NewEmbedder(context.Background(), &openaiembed.EmbeddingConfig{
+		APIKey:  cfg.APIKey,
+		Model:   cfg.Model,
+		BaseURL: cfg.BaseURL,
+	})
+	if err != nil {
+		panic("failed to create embedder: " + err.Error())
 	}
+
+	return &Client{
+		chatModel: cm,
+		model:     cfg.Model,
+		embedder:  emb,
+	}
+}
+
+// ChatModel 返回原生 ToolCallingChatModel，供 Agent 使用
+func (c *Client) ChatModel() model.ToolCallingChatModel {
+	return c.chatModel
 }
 
 // Chat 发送 system + user 消息
 func (c *Client) Chat(ctx context.Context, system, user string) (string, error) {
-	resp, err := c.cm.Generate(ctx, []*schema.Message{
+	resp, err := c.chatModel.Generate(ctx, []*schema.Message{
 		schema.SystemMessage(system),
 		schema.UserMessage(user),
 	})
@@ -89,7 +106,7 @@ func (c *Client) ChatMessages(ctx context.Context, msgs []ChatMessage) (string, 
 			messages[i] = schema.UserMessage(m.Content)
 		}
 	}
-	resp, err := c.cm.Generate(ctx, messages)
+	resp, err := c.chatModel.Generate(ctx, messages)
 	if err != nil {
 		return "", err
 	}
@@ -106,9 +123,9 @@ func (c *Client) ChatJSON(ctx context.Context, system, user string, result any) 
 	return json.Unmarshal([]byte(s), result)
 }
 
-// Embeddings 委托给 EmbeddingClient
+// Embeddings 生成文本向量
 func (c *Client) Embeddings(ctx context.Context, texts []string) ([][]float64, error) {
-	return c.embCli.Embed(ctx, texts)
+	return c.embedder.EmbedStrings(ctx, texts)
 }
 
 // ChatMessage 消息结构
@@ -124,7 +141,7 @@ func envOrDefault(key, def string) string {
 	return def
 }
 
-// normalizeJSON 从 LLM 回复中提取 JSON
+// NormalizeJSON 从 LLM 回复中提取 JSON
 func NormalizeJSON(s string) string {
 	s = strings.TrimSpace(s)
 	if len(s) >= 7 && s[:7] == "```json" {
