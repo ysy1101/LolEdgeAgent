@@ -3,7 +3,9 @@ import type { Article } from '../types';
 import { Spinner } from '../components/ui';
 import { Send, Plus, Trash2 } from 'lucide-react';
 
-interface Message { role: 'user' | 'assistant'; content: string; articles?: Article[] }
+interface Step { round: number; role: string; content: string; tool?: string }
+
+interface Message { role: 'user' | 'assistant'; content: string; steps?: Step[]; articles?: Article[] }
 
 interface Conv { id: number; title: string }
 
@@ -88,17 +90,16 @@ export default function Chat() {
         body: JSON.stringify({ message: q, history }),
       });
       const json = await res.json();
-      let answer = json.data?.content || json.data?.Content || '回答失败';
-      // 如果 LLM 返回的是 JSON 包裹，提取真正的文本
-      answer = unwrapJSON(answer);
+      let answer = json.data?.content || '回答失败';
+      const steps: Step[] = json.data?.steps || [];
 
-      // 保存 AI 回复
+      // 保存 AI 回复（含 steps）
       await fetch(`/api/v1/conversations/${convId}/messages`, {
         method: 'POST', headers: headers(),
         body: JSON.stringify({ role: 'assistant', content: answer }),
       });
 
-      const aiMsg: Message = { role: 'assistant', content: answer };
+      const aiMsg: Message = { role: 'assistant', content: answer, steps };
       setMessages(prev => [...prev, aiMsg]);
     } catch {
       setMessages(prev => [...prev, { role: 'assistant', content: '请求失败' }]);
@@ -154,6 +155,27 @@ export default function Chat() {
                     ))}
                   </div>
                 )}
+                {m.steps && m.steps.length > 0 && (
+                  <details className="mt-2 border-t border-gray-200 pt-2">
+                    <summary className="text-xs text-gray-500 cursor-pointer hover:text-gray-700">
+                      Agent 思考过程 ({m.steps.length} 步)
+                    </summary>
+                    <div className="mt-1 space-y-1 max-h-48 overflow-y-auto">
+                      {m.steps.map((s, j) => (
+                        <div key={j} className={`text-xs rounded px-2 py-1 ${
+                          s.role === 'error' ? 'bg-red-50 text-red-600' :
+                          s.role === 'tool' ? 'bg-green-50 text-green-700' :
+                          s.role === 'tool_call' ? 'bg-yellow-50 text-yellow-700' :
+                          'bg-blue-50 text-blue-700'
+                        }`}>
+                          <span className="font-medium">{s.role}</span>
+                          {s.tool && <span className="ml-1 text-gray-500">[{s.tool}]</span>}
+                          <span className="ml-1">{s.content}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </details>
+                )}
               </div>
             </div>
           ))}
@@ -177,33 +199,4 @@ export default function Chat() {
 
 function tryParseArticles(_content: string): Article[] | undefined {
   return undefined;
-}
-
-// 提取 Agent 回复中的真实文本（处理 LLM 可能返回的 JSON 包裹或工具调用残留）
-function unwrapJSON(text: string): string {
-  // 尝试 JSON 解析
-  try {
-    const obj = JSON.parse(text);
-    // 最终回复
-    if (obj.type === 'final' || obj.type === 'answer') {
-      return obj.content || text;
-    }
-    // 如果是工具调用残留，转换成可读文本
-    if (obj.type === 'tool') {
-      return `正在使用 ${obj.name} 工具...`;
-    }
-    // 返回 content 字段
-    if (obj.content && typeof obj.content === 'string') return obj.content;
-  } catch {}
-
-  // LLM 可能在文本中嵌入了 JSON，尝试提取最后一个完整 JSON 的 content
-  const matches = text.match(/\{"type":"final","content":"([^"]+)"\}/g);
-  if (matches) {
-    try {
-      const last = JSON.parse(matches[matches.length - 1]);
-      if (last.content) return last.content;
-    } catch {}
-  }
-
-  return text;
 }
