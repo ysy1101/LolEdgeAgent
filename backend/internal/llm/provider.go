@@ -18,6 +18,7 @@ type Config struct {
 	Model            string
 	EmbeddingModel   string
 	APIKey           string
+	EmbeddingAPIKey  string
 	BaseURL          string
 	EmbeddingBaseURL string
 }
@@ -28,10 +29,15 @@ func LoadConfig() Config {
 	if key == "" {
 		key = os.Getenv("API_KEY")
 	}
+	embKey := os.Getenv("EMBEDDING_API_KEY")
+	if embKey == "" {
+		embKey = key // 没单独配则复用 Chat 的
+	}
 	return Config{
 		Model:            envOrDefault("LLM_MODEL", "deepseek-chat"),
 		EmbeddingModel:   envOrDefault("EMBEDDING_MODEL", "text-embedding-3-small"),
 		APIKey:           key,
+		EmbeddingAPIKey:  embKey,
 		BaseURL:          baseURLOrDefault(),
 		EmbeddingBaseURL: embeddingBaseURLOrDefault(),
 	}
@@ -70,7 +76,7 @@ func NewClient(cfg Config) *Client {
 	}
 
 	emb, err := openaiembed.NewEmbedder(context.Background(), &openaiembed.EmbeddingConfig{
-		APIKey:  cfg.APIKey,
+		APIKey:  cfg.EmbeddingAPIKey,
 		Model:   cfg.EmbeddingModel,
 		BaseURL: cfg.EmbeddingBaseURL,
 	})
