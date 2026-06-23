@@ -31,7 +31,7 @@ func LoadConfig() Config {
 	}
 	embKey := os.Getenv("EMBEDDING_API_KEY")
 	if embKey == "" {
-		embKey = key // 没单独配则复用 Chat 的
+		embKey = key
 	}
 	return Config{
 		Model:            envOrDefault("LLM_MODEL", "deepseek-chat"),
@@ -58,13 +58,14 @@ func embeddingBaseURLOrDefault() string {
 }
 
 // Client 封装 Eino ToolCallingChatModel + Embedder
+// 监控通过 Eino Callback 体系（llm/callback.go）统一处理
 type Client struct {
 	chatModel model.ToolCallingChatModel
 	model     string
 	embedder  embedding.Embedder
 }
 
-// NewClient 创建客户端（ChatModel + Embedder 均通过 Eino）
+// NewClient 创建客户端
 func NewClient(cfg Config) *Client {
 	cm, err := openai.NewChatModel(context.Background(), &openai.ChatModelConfig{
 		Model:   cfg.Model,

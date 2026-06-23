@@ -48,6 +48,9 @@ func RegisterRoutes(r *gin.Engine, db *gorm.DB, logger *slog.Logger) {
 		}
 	}
 	var llmClient *llm.Client
+	// 注册 Eino 全局回调（监控所有 Chat + Embedding 调用）
+	llm.SetupGlobalCallbacks(logger)
+
 	if llmCfg.APIKey != "" {
 		llmClient = llm.NewClient(llmCfg)
 	}
