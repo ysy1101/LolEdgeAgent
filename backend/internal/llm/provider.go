@@ -15,10 +15,11 @@ import (
 
 // Config LLM 配置
 type Config struct {
-	Model          string
-	EmbeddingModel string
-	APIKey         string
-	BaseURL        string
+	Model            string
+	EmbeddingModel   string
+	APIKey           string
+	BaseURL          string
+	EmbeddingBaseURL string
 }
 
 // LoadConfig 从环境变量加载配置
@@ -28,10 +29,11 @@ func LoadConfig() Config {
 		key = os.Getenv("API_KEY")
 	}
 	return Config{
-		Model:          envOrDefault("LLM_MODEL", "deepseek-chat"),
-		EmbeddingModel: envOrDefault("EMBEDDING_MODEL", "text-embedding-3-small"),
-		APIKey:         key,
-		BaseURL:        baseURLOrDefault(),
+		Model:            envOrDefault("LLM_MODEL", "deepseek-chat"),
+		EmbeddingModel:   envOrDefault("EMBEDDING_MODEL", "text-embedding-3-small"),
+		APIKey:           key,
+		BaseURL:          baseURLOrDefault(),
+		EmbeddingBaseURL: embeddingBaseURLOrDefault(),
 	}
 }
 
@@ -40,6 +42,13 @@ func baseURLOrDefault() string {
 		return u
 	}
 	return "https://api.deepseek.com"
+}
+
+func embeddingBaseURLOrDefault() string {
+	if u := os.Getenv("EMBEDDING_BASE_URL"); u != "" {
+		return u
+	}
+	return "https://api.openai.com"
 }
 
 // Client 封装 Eino ToolCallingChatModel + Embedder
@@ -63,7 +72,7 @@ func NewClient(cfg Config) *Client {
 	emb, err := openaiembed.NewEmbedder(context.Background(), &openaiembed.EmbeddingConfig{
 		APIKey:  cfg.APIKey,
 		Model:   cfg.EmbeddingModel,
-		BaseURL: cfg.BaseURL,
+		BaseURL: cfg.EmbeddingBaseURL,
 	})
 	if err != nil {
 		panic("failed to create embedder: " + err.Error())
