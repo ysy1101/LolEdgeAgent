@@ -29,7 +29,10 @@ type Reply struct {
 	Steps      []Step `json:"steps,omitempty"`
 }
 
-const maxRounds = 8
+const (
+	maxRounds       = 8
+	maxContextChars = 12000 // 上下文字符数上限，超过则截断中间消息
+)
 
 type Agent struct {
 	client *llm.Client
@@ -56,12 +59,13 @@ func (a *Agent) Run(ctx context.Context, history []Message, userMsg string) (*Re
 	tools := buildAgentTools()
 	steps := make([]Step, 0)
 
-	// 构建消息列表
+	// 构建消息列表：system prompt + 截断后的历史 + 当前消息
 	var messages []llm.ChatMessage
 	messages = append(messages, llm.ChatMessage{Role: "system", Content: buildSystemPrompt(tools)})
 	for _, m := range history {
 		messages = append(messages, llm.ChatMessage{Role: m.Role, Content: m.Content})
 	}
+	messages = trimContext(messages) // 历史截断，保留 system prompt 头尾
 	messages = append(messages, llm.ChatMessage{Role: "user", Content: userMsg})
 
 	a.logger.Info("agent start", "user_msg", truncate(userMsg, 200))
@@ -69,6 +73,9 @@ func (a *Agent) Run(ctx context.Context, history []Message, userMsg string) (*Re
 	// Agent 循环
 	for round := 1; round <= maxRounds; round++ {
 		a.logger.Info("agent round", "round", round, "msg_count", len(messages))
+
+		// 每轮前截断，防止 tool 结果累积撑爆上下文
+		messages = trimContext(messages)
 
 		llmCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
 		raw, err := a.client.ChatMessages(llmCtx, messages)
@@ -205,6 +212,30 @@ func buildSystemPrompt(tools []agentTool) string {
 `)
 
 	return sb.String()
+}
+
+// trimContext 截断中间消息，保留 system prompt 和最近轮次，防止 token 失控
+func trimContext(msgs []llm.ChatMessage) []llm.ChatMessage {
+	if len(msgs) <= 5 {
+		return msgs
+	}
+	total := 0
+	for _, m := range msgs {
+		total += len(m.Content)
+	}
+	if total <= maxContextChars {
+		return msgs
+	}
+	// 保留 system prompt(第一条) + 最近 4 条
+	keep := 4
+	if len(msgs)-keep < 1 {
+		keep = len(msgs) - 1
+	}
+	result := make([]llm.ChatMessage, 0, keep+2)
+	result = append(result, msgs[0]) // system prompt
+	result = append(result, llm.ChatMessage{Role: "system", Content: "…(中间消息已截断)…"})
+	result = append(result, msgs[len(msgs)-keep:]...)
+	return result
 }
 
 func truncate(s string, n int) string {

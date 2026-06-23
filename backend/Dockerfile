@@ -7,8 +7,8 @@ COPY . .
 RUN CGO_ENABLED=0 go build -o server cmd/server/main.go
 
 # 阶段2：运行
-FROM alpine:3.21
-RUN apk add --no-cache tini wget
+FROM debian:bookworm-slim
+RUN apt-get update && apt-get install -y --no-install-recommends wget && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY --from=builder /app/server .
 RUN mkdir -p /app/data
@@ -16,5 +16,4 @@ EXPOSE 8080
 ENV DB_PATH=/app/data/loledgeagent.db
 HEALTHCHECK --interval=30s --timeout=3s --retries=3 \
   CMD wget -qO- http://localhost:8080/api/v1/health || exit 1
-ENTRYPOINT ["/sbin/tini", "--"]
 CMD ["./server"]
