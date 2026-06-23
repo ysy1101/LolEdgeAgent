@@ -1,4 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import type { Article } from '../types';
 import { Spinner } from '../components/ui';
 import { Send, Plus, Trash2 } from 'lucide-react';
@@ -145,7 +147,13 @@ export default function Chat() {
               <div className={`max-w-[80%] rounded-xl px-4 py-2.5 text-sm ${
                 m.role === 'user' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-900'
               }`}>
-                <p className="whitespace-pre-wrap">{m.content}</p>
+                {m.role === 'assistant' ? (
+                  <div className="prose prose-sm max-w-none prose-headings:text-gray-900 prose-a:text-blue-600 prose-code:text-pink-600 prose-pre:bg-gray-800 prose-pre:text-gray-100">
+                    <ReactMarkdown remarkPlugins={[remarkGfm]}>{m.content}</ReactMarkdown>
+                  </div>
+                ) : (
+                  <p className="whitespace-pre-wrap">{m.content}</p>
+                )}
                 {m.articles && m.articles.length > 0 && (
                   <div className="mt-2 border-t border-gray-200 pt-2">
                     <p className="mb-1 text-xs text-gray-500">参考文章：</p>
