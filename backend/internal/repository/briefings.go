@@ -43,10 +43,10 @@ func (r *BriefingRepo) List(userID uint, page, limit int) ([]models.Briefing, in
 	return briefings, total, q.Offset(offset).Limit(limit).Find(&briefings).Error
 }
 
-// GetByID 获取简报详情（含关联文章）
-func (r *BriefingRepo) GetByID(id uint) (*models.Briefing, error) {
+// GetByID 获取简报详情（含关联文章，按用户过滤）
+func (r *BriefingRepo) GetByID(id uint, userID uint) (*models.Briefing, error) {
 	var b models.Briefing
-	if err := r.db.First(&b, id).Error; err != nil {
+	if err := r.db.Where("id = ? AND user_id = ?", id, userID).First(&b).Error; err != nil {
 		return nil, err
 	}
 	return &b, nil

@@ -16,6 +16,7 @@ type FetchService struct {
 	sourceRepo  *repository.SourceRepo
 	articleRepo *repository.ArticleRepo
 	logRepo     *repository.FetchLogRepo
+	ragSvc      *RAGService
 	logger      *slog.Logger
 }
 
@@ -23,19 +24,21 @@ func NewFetchService(
 	sourceRepo *repository.SourceRepo,
 	articleRepo *repository.ArticleRepo,
 	logRepo *repository.FetchLogRepo,
+	ragSvc *RAGService,
 	logger *slog.Logger,
 ) *FetchService {
 	return &FetchService{
 		sourceRepo:  sourceRepo,
 		articleRepo: articleRepo,
 		logRepo:     logRepo,
+		ragSvc:      ragSvc,
 		logger:      logger,
 	}
 }
 
 // FetchAll 拉取所有启用的源，返回新文章总数。
 func (s *FetchService) FetchAll(ctx context.Context) ([]models.Article, error) {
-	list, err := s.sourceRepo.List(true) // 只取 enabled
+	list, err := s.sourceRepo.List(true)
 	if err != nil {
 		return nil, fmt.Errorf("获取源列表失败: %w", err)
 	}
@@ -44,7 +47,7 @@ func (s *FetchService) FetchAll(ctx context.Context) ([]models.Article, error) {
 		allArticles []models.Article
 		mu          sync.Mutex
 		wg          sync.WaitGroup
-		sem         = make(chan struct{}, 5) // 最大并发数
+		sem         = make(chan struct{}, 5)
 	)
 
 	for i := range list {
@@ -112,6 +115,14 @@ func (s *FetchService) fetchOne(ctx context.Context, src models.Source) ([]model
 			log.ErrorMessage = err.Error()
 			return nil, err
 		}
+		// 异步建向量索引（不阻塞抓取，失败不影响入库）
+		for _, a := range deduped {
+			go func(article models.Article) {
+				if err := s.ragSvc.IndexArticle(context.Background(), &article); err != nil {
+					s.logger.Warn("article index failed", "article_id", article.ID, "error", err)
+				}
+			}(a)
+		}
 	}
 
 	log.Status = "success"
@@ -133,7 +144,7 @@ func (s *FetchService) deduplicate(articles []models.Article) []models.Article {
 	existing, err := s.articleRepo.FindExistingHashes(hashes)
 	if err != nil {
 		s.logger.Warn("dedup hash lookup failed", "error", err)
-		return articles // 失败时保留全部
+		return articles
 	}
 
 	result := make([]models.Article, 0, len(articles))

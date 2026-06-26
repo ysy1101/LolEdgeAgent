@@ -76,13 +76,22 @@ func NewClient(cfg Config) *Client {
 		panic("failed to create chat model: " + err.Error())
 	}
 
-	emb, err := openaiembed.NewEmbedder(context.Background(), &openaiembed.EmbeddingConfig{
-		APIKey:  cfg.EmbeddingAPIKey,
-		Model:   cfg.EmbeddingModel,
-		BaseURL: cfg.EmbeddingBaseURL,
-	})
-	if err != nil {
-		panic("failed to create embedder: " + err.Error())
+	// Embedding：Ollama 用原生 API，其他用 OpenAI 兼容
+	var emb embedding.Embedder
+	if strings.Contains(cfg.EmbeddingBaseURL, "11434") ||
+		strings.Contains(cfg.EmbeddingBaseURL, "ollama") ||
+		strings.Contains(cfg.EmbeddingBaseURL, "host.docker.internal") {
+		emb = NewOllamaEmbedder(cfg.EmbeddingBaseURL, cfg.EmbeddingModel)
+	} else {
+		var err error
+		emb, err = openaiembed.NewEmbedder(context.Background(), &openaiembed.EmbeddingConfig{
+			APIKey:  cfg.EmbeddingAPIKey,
+			Model:   cfg.EmbeddingModel,
+			BaseURL: cfg.EmbeddingBaseURL,
+		})
+		if err != nil {
+			panic("failed to create embedder: " + err.Error())
+		}
 	}
 
 	return &Client{

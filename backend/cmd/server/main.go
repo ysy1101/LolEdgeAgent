@@ -44,7 +44,7 @@ func main() {
 	r := gin.New()
 	r.Use(gin.Recovery())
 
-	v1.RegisterRoutes(r, db, logger)
+	v1.RegisterRoutes(r, db, logger, cfg)
 
 	logger.Info("server starting", "port", cfg.Server.Port)
 	if err := r.Run(":" + cfg.Server.Port); err != nil {

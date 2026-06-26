@@ -439,15 +439,15 @@ type Plugin interface {
 
 ## 进度记录
 
-| Step | 状态 | 开始时间 | 完成时间 |
-|------|------|---------|---------|
-| Step 0 — README 文档 | ✅ 已完成 | | 2026-05-29 |
-| Step 1 — 项目骨架 | ✅ 已完成 | 2026-05-30 | 2026-05-30 |
-| Step 2 — 数据层 | ⏳ 待开始 | | |
-| Step 3 — 插件系统 | ⏳ 待开始 | | |
-| Step 4 — LLM 集成 | ⏳ 待开始 | | |
-| Step 5 — 管线引擎 | ⏳ 待开始 | | |
-| Step 6 — HTTP API | ⏳ 待开始 | | |
-| Step 7 — 前端页面 | ⏳ 待开始 | | |
-| Step 8 — 调度 + 源 | ⏳ 待开始 | | |
-| Step 9 — 高级功能 | ⏳ 待开始 | | |
+| Step | 状态 | 说明 |
+|------|------|------|
+| Step 0 — README 文档 | ✅ 已完成 | 2026-05-29 |
+| Step 1 — 项目骨架 | ✅ 已完成 | 2026-05-30 |
+| Step 2 — 数据层 | ✅ 已完成 | models + repository CRUD + AutoMigrate |
+| Step 3 — 插件系统 | ✅ 已完成 | RSS / HN / GitHub 三源 + FetchService |
+| Step 4 — LLM 集成 | ✅ 已完成 | Eino ChatModel + Embedder + JSON Agent |
+| Step 5 — 管线引擎 | ✅ 已完成 | 采集→排序→摘要→组装 + fallback |
+| Step 6 — HTTP API | ✅ 已完成 | REST 端点 + JWT 认证 |
+| Step 7 — 前端页面 | ✅ 已完成 | Chat / Briefings / Sources / Preferences |
+| Step 8 — 调度 + 源 | ✅ 已完成 | Cron 定时 + HN / GitHub 源 |
+| Step 9 — 高级功能 | ✅ 已完成 | Docker / RAG 问答 / Agent 对话 |

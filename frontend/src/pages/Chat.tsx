@@ -17,7 +17,17 @@ export default function Chat() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
-  const bottomRef = useRef<HTMLDivElement>(null);
+  const msgContainerRef = useRef<HTMLDivElement>(null);
+
+  const scrollToBottom = () => {
+    const el = msgContainerRef.current;
+    if (el) {
+      // 等 DOM 渲染完再滚，避免 ReactMarkdown 渲染中滚动不准
+      requestAnimationFrame(() => {
+        el.scrollTop = el.scrollHeight;
+      });
+    }
+  };
 
   const token = () => localStorage.getItem('token') || '';
   const headers = () => ({ 'Content-Type': 'application/json', Authorization: `Bearer ${token()}` });
@@ -44,10 +54,10 @@ export default function Chat() {
     const res = await fetch(`/api/v1/conversations/${id}/messages`, { headers: headers() });
     const json = await res.json();
     if (json.code === 0) {
-      setMessages(json.data.map((m: any) => ({
-        role: m.role,
-        content: m.content,
-      })));
+      const loaded = json.data.map((m: any) => ({ role: m.role, content: m.content }));
+      setMessages(loaded);
+      // 等 DOM 渲染完再滚到底部
+      setTimeout(scrollToBottom, 100);
     }
   };
 
@@ -108,7 +118,8 @@ export default function Chat() {
     }
   };
 
-  useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages]);
+  // 消息变化时滚到底部（新消息、切换对话）
+  useEffect(() => { scrollToBottom(); }, [messages]);
 
   return (
     <div className="flex h-[calc(100vh-7rem)]">
@@ -132,7 +143,7 @@ export default function Chat() {
       </div>
 
       <div className="flex flex-1 flex-col">
-        <div className="flex-1 overflow-y-auto space-y-4 pr-2">
+        <div ref={msgContainerRef} className="flex-1 overflow-y-auto space-y-4 pr-2">
           {messages.length === 0 && (
             <div className="pt-20 text-center text-gray-400">
               <p className="text-lg">基于已采集文章的知识问答</p>
@@ -175,7 +186,6 @@ export default function Chat() {
             </div>
           ))}
           {loading && <div className="flex justify-center"><Spinner className="h-5 w-5" /></div>}
-          <div ref={bottomRef} />
         </div>
 
         <div className="mt-3 flex gap-2 border-t border-gray-200 pt-3">

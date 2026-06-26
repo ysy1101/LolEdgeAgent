@@ -132,7 +132,7 @@ func makeGetBriefingTool(briefingRepo *repository.BriefingRepo) tool.InvokableTo
 		"get_briefing",
 		"查看某份简报的详细内容。",
 		func(ctx context.Context, input GetBriefingInput) (GetBriefingOutput, error) {
-			b, err := briefingRepo.GetByID(input.ID)
+			b, err := briefingRepo.GetByID(input.ID, getUserID(ctx))
 			if err != nil {
 				return GetBriefingOutput{}, err
 			}

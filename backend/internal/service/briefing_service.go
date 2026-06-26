@@ -73,7 +73,9 @@ func (s *BriefingService) GenerateAsync(ctx context.Context, userID uint) (uint,
 	return placeholder.ID, nil
 }
 
-func (s *BriefingService) Get(id uint) (*models.Briefing, error) { return s.repo.GetByID(id) }
+func (s *BriefingService) Get(id uint, userID uint) (*models.Briefing, error) {
+	return s.repo.GetByID(id, userID)
+}
 
 func (s *BriefingService) List(userID uint, page, limit int) ([]models.Briefing, int64, error) {
 	return s.repo.List(userID, page, limit)

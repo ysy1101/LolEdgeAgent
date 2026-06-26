@@ -22,7 +22,7 @@ func (h *BriefingHandler) List(c *gin.Context) {
 	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "20"))
 	userID := c.GetUint("user_id")
 	if userID == 0 {
-		userID = 1 // MVP: 默认用户
+		userID = 1
 	}
 
 	if page < 1 {
@@ -44,7 +44,11 @@ func (h *BriefingHandler) List(c *gin.Context) {
 
 func (h *BriefingHandler) Get(c *gin.Context) {
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
-	b, err := h.svc.Get(uint(id))
+	userID := c.GetUint("user_id")
+	if userID == 0 {
+		userID = 1
+	}
+	b, err := h.svc.Get(uint(id), userID)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"code": 404, "message": "briefing not found"})
 		return
