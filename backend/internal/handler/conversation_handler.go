@@ -1,6 +1,8 @@
 package handler
 
 import (
+	"context"
+	"log/slog"
 	"strconv"
 
 	"loledgeagent/internal/models"
@@ -11,21 +13,36 @@ import (
 )
 
 type ConversationHandler struct {
-	convRepo *repository.ConversationRepo
-	msgRepo  *repository.MessageRepo
-	ragSvc   *service.RAGService
+	convRepo  *repository.ConversationRepo
+	msgRepo   *repository.MessageRepo
+	ragSvc    *service.RAGService
+	memorySvc *service.MemoryService
+	logger    *slog.Logger
 }
 
 func NewConversationHandler(
 	convRepo *repository.ConversationRepo,
 	msgRepo *repository.MessageRepo,
 	ragSvc *service.RAGService,
+	memorySvc *service.MemoryService,
+	logger *slog.Logger,
 ) *ConversationHandler {
-	return &ConversationHandler{convRepo: convRepo, msgRepo: msgRepo, ragSvc: ragSvc}
+	return &ConversationHandler{convRepo: convRepo, msgRepo: msgRepo, ragSvc: ragSvc, memorySvc: memorySvc, logger: logger}
 }
 
 func (h *ConversationHandler) Create(c *gin.Context) {
 	userID := c.GetUint("user_id")
+
+	// 查找上一个对话，异步压缩为长期记忆
+	latest, _ := h.convRepo.GetLatest(userID)
+	if latest != nil {
+		go func(convID uint) {
+			if err := h.memorySvc.Compress(context.Background(), userID, convID); err != nil {
+				h.logger.Warn("memory compress failed", "conv_id", convID, "error", err)
+			}
+		}(latest.ID)
+	}
+
 	conv := &models.Conversation{UserID: userID}
 	if err := h.convRepo.Create(conv); err != nil {
 		c.JSON(500, gin.H{"code": 500, "message": err.Error()})

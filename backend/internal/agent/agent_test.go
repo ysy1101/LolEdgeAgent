@@ -9,7 +9,7 @@ import (
 
 // TestBuildSystemPrompt 验证系统提示不含工具 Schema 描述
 func TestBuildSystemPrompt(t *testing.T) {
-	prompt := buildSystemPrompt()
+	prompt := buildSystemPrompt("")
 
 	// 系统提示不应包含工具的参数描述/JSON Schema（工具通过原生 Function Calling 传递）
 	if contains(prompt, "jsonschema") {
@@ -99,7 +99,7 @@ func TestBuildMessages(t *testing.T) {
 	}
 	userMsg := "查看最近的简报"
 
-	msgs := buildMessages(history, userMsg)
+	msgs := buildMessages(history, userMsg, "")
 
 	// 第一条必须是 system
 	if msgs[0].Role != "system" {

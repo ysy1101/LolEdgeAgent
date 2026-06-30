@@ -29,6 +29,14 @@ func (r *ConversationRepo) UpdateTitle(id uint, title string) error {
 	return r.db.Model(&models.Conversation{}).Where("id = ?", id).Update("title", title).Error
 }
 
+func (r *ConversationRepo) GetLatest(userID uint) (*models.Conversation, error) {
+	var c models.Conversation
+	if err := r.db.Where("user_id = ?", userID).Order("updated_at DESC").First(&c).Error; err != nil {
+		return nil, err
+	}
+	return &c, nil
+}
+
 func (r *ConversationRepo) Touch(id uint) error {
 	return r.db.Model(&models.Conversation{}).Where("id = ?", id).Update("updated_at", gorm.Expr("datetime('now')")).Error
 }

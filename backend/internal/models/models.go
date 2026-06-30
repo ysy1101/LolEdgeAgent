@@ -141,4 +141,27 @@ type ArticleEmbedding struct {
 
 func (ArticleEmbedding) TableName() string { return "article_embeddings" }
 
+// Memory 长期记忆（LLM 压缩摘要）
+type Memory struct {
+	ID          uint      `gorm:"primaryKey" json:"id"`
+	UserID      uint      `gorm:"not null;index" json:"user_id"`
+	Content     string    `gorm:"not null" json:"content"`      // LLM 压缩后的摘要
+	Keywords    string    `gorm:"not null;default:'[]'" json:"keywords"` // JSON 关键词数组
+	Importance  float64   `gorm:"not null;default:0.5" json:"importance"` // 重要性 0~1
+	AccessCount int       `gorm:"not null;default:0" json:"access_count"`
+	CreatedAt   time.Time `gorm:"autoCreateTime" json:"created_at"`
+	UpdatedAt   time.Time `gorm:"autoUpdateTime" json:"updated_at"`
+}
+
+func (Memory) TableName() string { return "memories" }
+
+// MemoryEmbedding 记忆向量
+type MemoryEmbedding struct {
+	ID        uint   `gorm:"primaryKey" json:"id"`
+	MemoryID  uint   `gorm:"not null;uniqueIndex" json:"memory_id"`
+	Embedding string `gorm:"not null" json:"embedding"` // JSON 向量数组
+}
+
+func (MemoryEmbedding) TableName() string { return "memory_embeddings" }
+
 func (FetchLog) TableName() string { return "fetch_logs" }

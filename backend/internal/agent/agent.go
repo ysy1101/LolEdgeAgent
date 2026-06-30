@@ -42,16 +42,23 @@ const (
 	maxTokens        = 8000
 )
 
+// MemoryRecall 记忆召回接口（service.MemoryService 实现）
+type MemoryRecall interface {
+	Recall(ctx context.Context, userID uint, query string) string
+	Compress(ctx context.Context, userID uint, conversationID uint) error
+}
+
 // Agent 对话引擎
 type Agent struct {
 	defaultCfg llm.Config
 	prefRepo   *repository.PreferenceRepo
+	memory     MemoryRecall
 	logger     *slog.Logger
 }
 
 // New 创建 Agent
-func New(defaultCfg llm.Config, prefRepo *repository.PreferenceRepo, logger *slog.Logger) *Agent {
-	return &Agent{defaultCfg: defaultCfg, prefRepo: prefRepo, logger: logger}
+func New(defaultCfg llm.Config, prefRepo *repository.PreferenceRepo, memory MemoryRecall, logger *slog.Logger) *Agent {
+	return &Agent{defaultCfg: defaultCfg, prefRepo: prefRepo, memory: memory, logger: logger}
 }
 
 // Run 执行 Agent 对话
@@ -75,8 +82,17 @@ func (a *Agent) Run(ctx context.Context, history []Message, userMsg string) (*Re
 		}
 	}
 
+	// --- 记忆召回 ---
+	memoryCtx := ""
+	if a.memory != nil {
+		memoryCtx = a.memory.Recall(ctx, getUserID(ctx), userMsg)
+		if memoryCtx != "" {
+			a.logger.Info("agent memory recalled", "chars", len(memoryCtx))
+		}
+	}
+
 	// --- 构建消息列表 ---
-	msgs := buildMessages(history, userMsg)
+	msgs := buildMessages(history, userMsg, memoryCtx)
 
 	a.logger.Info("agent start", "user_msg", truncate(userMsg, 200), "history_msgs", len(history))
 
@@ -206,11 +222,11 @@ func (a *Agent) buildClient(ctx context.Context) (*llm.Client, error) {
 }
 
 // buildMessages 构建消息列表
-func buildMessages(history []Message, userMsg string) []*schema.Message {
+func buildMessages(history []Message, userMsg, memoryCtx string) []*schema.Message {
 	var msgs []*schema.Message
 
-	// System prompt（只含业务规则，工具通过原生 Function Calling 传递）
-	msgs = append(msgs, schema.SystemMessage(buildSystemPrompt()))
+	// System prompt（业务规则 + 记忆上下文）
+	msgs = append(msgs, schema.SystemMessage(buildSystemPrompt(memoryCtx)))
 
 	// 历史消息
 	for _, m := range history {
@@ -228,9 +244,9 @@ func buildMessages(history []Message, userMsg string) []*schema.Message {
 	return msgs
 }
 
-// buildSystemPrompt 构建系统提示（只含业务规则，工具通过原生 Function Calling 传递）
-func buildSystemPrompt() string {
-	return `你是 LolEdgeAgent，一个内容聚合和知识助手。
+// buildSystemPrompt 构建系统提示（业务规则 + 记忆上下文）
+func buildSystemPrompt(memoryCtx string) string {
+	prompt := `你是 LolEdgeAgent，一个内容聚合和知识助手。
 
 ## 回复规则
 1. 用户说"查看简报""最近的简报"→ 调用 list_briefings
@@ -239,6 +255,12 @@ func buildSystemPrompt() string {
 4. 生成新简报 → 调用 generate_briefing
 5. 闲聊问候不需要工具，直接回答
 6. 用中文回复，引用文章时带标题和链接`
+
+	if memoryCtx != "" {
+		prompt += "\n\n## 关于用户的记忆\n结合以下历史偏好回答：\n" + memoryCtx
+	}
+
+	return prompt
 }
 
 // trimContext 上下文截断（按 token 估算，保留 system + 最近的完整轮次）

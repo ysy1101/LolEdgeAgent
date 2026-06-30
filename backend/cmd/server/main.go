@@ -33,6 +33,8 @@ func main() {
 		&models.ArticleEmbedding{},
 		&models.Conversation{},
 		&models.ChatMessage{},
+		&models.Memory{},
+		&models.MemoryEmbedding{},
 	)
 
 	// 旧版 admin 用户无密码，允许后续注册覆盖
