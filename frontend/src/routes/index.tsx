@@ -6,6 +6,7 @@ import BriefingDetail from '../pages/Briefings/BriefingDetail';
 import SourceList from '../pages/Sources/SourceList';
 import Preferences from '../pages/Preferences';
 import Chat from '../pages/Chat';
+import ArticleList from '../pages/Articles/ArticleList';
 import Login from '../pages/Login';
 import NotFound from '../pages/NotFound';
 import { Spinner } from '../components/ui';
@@ -49,6 +50,7 @@ export const router = createBrowserRouter([
           { path: 'briefings', element: <BriefingList /> },
           { path: 'briefings/:id', element: <BriefingDetail /> },
           { path: 'sources', element: <SourceList /> },
+          { path: 'articles', element: <ArticleList /> },
           { path: 'preferences', element: <Preferences /> },
         ],
       },

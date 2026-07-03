@@ -31,9 +31,10 @@ type Step struct {
 
 // Reply Agent 回复
 type Reply struct {
-	Content    string `json:"content"`
-	ToolCalled string `json:"tool_called"`
-	Steps      []Step `json:"steps,omitempty"`
+	Content    string     `json:"content"`
+	ToolCalled string     `json:"tool_called"`
+	Steps      []Step     `json:"steps,omitempty"`
+	State      *AgentState `json:"state,omitempty"`
 }
 
 const (
@@ -94,6 +95,8 @@ func (a *Agent) Run(ctx context.Context, history []Message, userMsg string) (*Re
 	// --- 构建消息列表 ---
 	msgs := buildMessages(history, userMsg, memoryCtx)
 
+	// --- AgentState 追踪 ---
+	st := NewAgentState("", getUserID(ctx), userMsg)
 	a.logger.Info("agent start", "user_msg", truncate(userMsg, 200), "history_msgs", len(history))
 
 	// --- Agent 循环（原生 Function Calling）---
@@ -172,7 +175,8 @@ func (a *Agent) Run(ctx context.Context, history []Message, userMsg string) (*Re
 				break
 			}
 		}
-		return &Reply{Content: resp.Content, ToolCalled: toolCalled, Steps: steps}, nil
+		st.Finalize(resp.Content, round)
+		return &Reply{Content: resp.Content, ToolCalled: toolCalled, Steps: steps, State: st}, nil
 	}
 
 	return &Reply{Content: "抱歉，处理步骤超限，请简化问题重试。", Steps: steps}, nil

@@ -94,6 +94,9 @@ export default function BriefingList() {
                   <span className="text-xs text-gray-400">#{b.id}</span>
                   <span className="font-medium text-gray-900 truncate">{b.title}</span>
                   <StatusBadge status={b.status} />
+                  {(b.status === 'generating' || b.status === 'pending') && b.progress && (
+                    <span className="text-xs text-blue-500 animate-pulse">{b.progress}</span>
+                  )}
                 </div>
                 {b.status === 'failed' && b.error_message ? (
                   <p className="mt-1 text-xs text-red-600">{b.error_message}</p>

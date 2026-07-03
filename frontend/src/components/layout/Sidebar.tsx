@@ -1,5 +1,5 @@
 import { NavLink, useNavigate } from 'react-router';
-import { FileText, Radio, Settings, Zap, RefreshCw, MessageSquare, LogOut } from 'lucide-react';
+import { FileText, Radio, Settings, Zap, RefreshCw, MessageSquare, LogOut, BookOpen } from 'lucide-react';
 
 export function Sidebar() {
   const navigate = useNavigate();
@@ -20,6 +20,7 @@ export function Sidebar() {
         <NavItem to="/chat" icon={<MessageSquare className="h-4 w-4" />} label="对话" end />
         <NavItem to="/briefings" icon={<FileText className="h-4 w-4" />} label="简报" end />
         <NavItem to="/sources" icon={<Radio className="h-4 w-4" />} label="内容源" />
+        <NavItem to="/articles" icon={<BookOpen className="h-4 w-4" />} label="文章库" />
         <NavItem to="/preferences" icon={<Settings className="h-4 w-4" />} label="偏好设置" />
       </nav>
 

@@ -54,11 +54,25 @@ func (r *ArticleRepo) FindExistingHashes(hashes []string) (map[string]bool, erro
 	return set, nil
 }
 
-// List 分页列表
-func (r *ArticleRepo) List(sourceID uint, page, limit int) ([]models.Article, int64, error) {
+
+// GetDates 获取有文章的日期列表
+func (r *ArticleRepo) GetDates() ([]string, error) {
+	var dates []string
+	err := r.db.Model(&models.Article{}).
+		Select("DISTINCT date(fetched_at) as date").
+		Order("date DESC").
+		Pluck("date", &dates).Error
+	return dates, err
+}
+
+// List 分页列表（支持按日期过滤）
+func (r *ArticleRepo) List(sourceID uint, date string, page, limit int) ([]models.Article, int64, error) {
 	q := r.db.Model(&models.Article{}).Order("fetched_at DESC")
 	if sourceID > 0 {
 		q = q.Where("source_id = ?", sourceID)
+	}
+	if date != "" {
+		q = q.Where("date(fetched_at) = ?", date)
 	}
 
 	var total int64

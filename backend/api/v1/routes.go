@@ -94,6 +94,7 @@ func RegisterRoutes(r *gin.Engine, db *gorm.DB, logger *slog.Logger, cfg *config
 		articleH := handler.NewArticleHandler(articleRepo, fetchSvc)
 		protected.GET("/articles", articleH.List)
 		protected.POST("/articles/fetch", articleH.FetchAll)
+		protected.GET("/articles/dates", articleH.Dates)
 
 		briefingH := handler.NewBriefingHandler(briefingSvc)
 		protected.GET("/briefings", briefingH.List)

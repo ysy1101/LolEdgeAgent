@@ -35,6 +35,7 @@ export interface Briefing {
   generated_at: string;
   status: 'pending' | 'generating' | 'completed' | 'failed';
   error_message?: string;
+  progress?: string;
   articles?: Article[];
 }
 

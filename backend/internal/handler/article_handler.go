@@ -23,6 +23,7 @@ func (h *ArticleHandler) List(c *gin.Context) {
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "20"))
 	sourceID, _ := strconv.Atoi(c.DefaultQuery("source_id", "0"))
+	date := c.DefaultQuery("date", "") // 按日期过滤
 
 	if page < 1 {
 		page = 1
@@ -31,7 +32,7 @@ func (h *ArticleHandler) List(c *gin.Context) {
 		limit = 20
 	}
 
-	list, total, err := h.repo.List(uint(sourceID), page, limit)
+	list, total, err := h.repo.List(uint(sourceID), date, page, limit)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "message": err.Error()})
 		return
@@ -39,6 +40,19 @@ func (h *ArticleHandler) List(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success", "data": gin.H{
 		"items": list, "total": total, "page": page, "page_size": limit,
 	}})
+}
+
+// Dates 返回有文章的日期列表
+func (h *ArticleHandler) Dates(c *gin.Context) {
+	dates, err := h.repo.GetDates()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"code": 500, "message": err.Error()})
+		return
+	}
+	if dates == nil {
+		dates = []string{}
+	}
+	c.JSON(http.StatusOK, gin.H{"code": 0, "message": "success", "data": dates})
 }
 
 func (h *ArticleHandler) FetchAll(c *gin.Context) {

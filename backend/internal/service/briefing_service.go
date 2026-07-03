@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 
 	"loledgeagent/internal/models"
@@ -35,13 +36,13 @@ func NewBriefingService(
 	}
 }
 
-// GenerateAsync 异步生成简报，立即返回 briefing_id
+// GenerateAsync 异步生成简报，立即返回 briefing_id，过程中更新 progress
 func (s *BriefingService) GenerateAsync(ctx context.Context, userID uint) (uint, error) {
-	// 先创建占位记录
 	placeholder := &models.Briefing{
-		UserID:  userID,
-		Title:   "生成中...",
-		Status:  "generating",
+		UserID:   userID,
+		Title:    "生成中...",
+		Status:   "generating",
+		Progress: "loading:fetching articles",
 	}
 	if err := s.repo.Create(placeholder); err != nil {
 		return 0, err
@@ -50,13 +51,13 @@ func (s *BriefingService) GenerateAsync(ctx context.Context, userID uint) (uint,
 	go func() {
 		bg := context.Background()
 
-		// 从 DB 读最近文章，而不是重新抓取（抓取会去重，已有文章返回空）
 		articles, err := s.articleRepo.GetRecent(200)
 		if err != nil || len(articles) == 0 {
 			_ = s.repo.UpdateStatus(placeholder.ID, "failed", "no articles in database, fetch first")
 			s.logger.Error("no articles", "error", err)
 			return
 		}
+		_ = s.repo.UpdateProgress(placeholder.ID, "generating", fmt.Sprintf("ranking %d articles", len(articles)))
 
 		result, err := s.engine.Run(bg, articles, userID)
 		if err != nil {
@@ -65,7 +66,6 @@ func (s *BriefingService) GenerateAsync(ctx context.Context, userID uint) (uint,
 			return
 		}
 
-		// 删除占位记录，改用管线生成的正式记录
 		_ = s.repo.Delete(placeholder.ID)
 		s.logger.Info("briefing generated", "id", result.ID, "articles", result.ArticleCount)
 	}()

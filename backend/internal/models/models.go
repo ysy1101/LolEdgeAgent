@@ -57,6 +57,7 @@ type Briefing struct {
 	GeneratedAt     time.Time `gorm:"not null;index" json:"generated_at"`
 	Status          string    `gorm:"not null;default:pending;index" json:"status"`
 	ErrorMessage    string    `json:"error_message"`
+	Progress        string    `json:"progress,omitempty"` // JSON: {"stage":"ranking","detail":"scoring 18 articles"}
 }
 
 func (Briefing) TableName() string { return "briefings" }
