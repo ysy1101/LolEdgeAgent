@@ -59,14 +59,13 @@ func (s *BriefingService) GenerateAsync(ctx context.Context, userID uint) (uint,
 		}
 		_ = s.repo.UpdateProgress(placeholder.ID, "generating", fmt.Sprintf("ranking %d articles", len(articles)))
 
-		result, err := s.engine.Run(bg, articles, userID)
+		result, err := s.engine.RunInto(bg, articles, userID, placeholder.ID)
 		if err != nil {
 			_ = s.repo.UpdateStatus(placeholder.ID, "failed", err.Error())
 			s.logger.Error("pipeline failed", "error", err)
 			return
 		}
 
-		_ = s.repo.Delete(placeholder.ID)
 		s.logger.Info("briefing generated", "id", result.ID, "articles", result.ArticleCount)
 	}()
 

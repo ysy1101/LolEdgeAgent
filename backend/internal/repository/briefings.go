@@ -67,6 +67,34 @@ func (r *BriefingRepo) Delete(id uint) error {
 	return r.db.Select(clause.Associations).Delete(&models.Briefing{}, id).Error
 }
 
+// FillPlaceholder 用管线结果填充占位记录（UPDATE，不 INSERT）
+func (r *BriefingRepo) FillPlaceholder(id uint, briefing *models.Briefing, articles []models.BriefingArticle) error {
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Model(&models.Briefing{}).Where("id = ?", id).Updates(map[string]any{
+			"title":            briefing.Title,
+			"content_markdown": briefing.ContentMarkdown,
+			"article_count":    briefing.ArticleCount,
+			"generated_at":     briefing.GeneratedAt,
+			"status":           briefing.Status,
+		}).Error; err != nil {
+			return err
+		}
+		if len(articles) > 0 {
+			tx.Where("briefing_id = ?", id).Delete(&models.BriefingArticle{})
+			for i := range articles {
+				articles[i].BriefingID = id
+			}
+			return tx.Create(&articles).Error
+		}
+		return nil
+	})
+}
+
+// MoveArticles 将文章关联从 oldID 迁移到 newID
+func (r *BriefingRepo) MoveArticles(oldID, newID uint) error {
+	return r.db.Model(&models.BriefingArticle{}).Where("briefing_id = ?", oldID).Update("briefing_id", newID).Error
+}
+
 func (r *BriefingRepo) UpdateStatus(id uint, status string, errMsg string) error {
 	return r.db.Model(&models.Briefing{}).Where("id = ?", id).
 		Updates(map[string]any{"status": status, "error_message": errMsg}).Error

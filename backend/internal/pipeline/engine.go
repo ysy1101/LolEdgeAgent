@@ -13,7 +13,6 @@ import (
 	"loledgeagent/internal/repository"
 )
 
-// Engine 管线编排器
 type Engine struct {
 	articleRepo  *repository.ArticleRepo
 	briefingRepo *repository.BriefingRepo
@@ -38,14 +37,22 @@ func NewEngine(
 	}
 }
 
-// Run 核心管线：排序→摘要→组装→保存
+// Run 核心管线（新建记录）
 func (e *Engine) Run(ctx context.Context, articles []models.Article, userID uint) (*models.Briefing, error) {
+	return e.run(ctx, articles, userID, 0)
+}
+
+// RunInto 同 Run，但保存到指定占位 ID（不跳号）
+func (e *Engine) RunInto(ctx context.Context, articles []models.Article, userID, placeholderID uint) (*models.Briefing, error) {
+	return e.run(ctx, articles, userID, placeholderID)
+}
+
+func (e *Engine) run(ctx context.Context, articles []models.Article, userID, placeholderID uint) (*models.Briefing, error) {
 	if len(articles) == 0 {
 		return nil, fmt.Errorf("no articles")
 	}
 	e.logger.Info("pipeline: start", "articles", len(articles))
 
-	// ① 加载偏好
 	pref, err := e.prefRepo.Get(userID)
 	if err != nil {
 		return nil, fmt.Errorf("preferences: %w", err)
@@ -53,7 +60,6 @@ func (e *Engine) Run(ctx context.Context, articles []models.Article, userID uint
 	var keywords []string
 	json.Unmarshal([]byte(pref.Keywords), &keywords)
 
-	// ② LLM 排名
 	rankInput := buildRankInput(articles)
 	articlesJSON, _ := json.Marshal(rankInput)
 	interestsJSON, _ := json.Marshal(keywords)
@@ -70,7 +76,6 @@ func (e *Engine) Run(ctx context.Context, articles []models.Article, userID uint
 	}
 	topArticles := e.selectTop(articles, scored, maxN)
 
-	// ③ LLM 摘要
 	e.logger.Info("pipeline: summarizing", "count", len(topArticles))
 	summaryInputs := make([]llm.SummaryInput, len(topArticles))
 	for i := range topArticles {
@@ -88,7 +93,6 @@ func (e *Engine) Run(ctx context.Context, articles []models.Article, userID uint
 		}
 	}
 
-	// ④ LLM 组装
 	assemblyInput := buildAssemblyInput(topArticles, summaries)
 	assemblyJSON, _ := json.Marshal(assemblyInput)
 
@@ -98,13 +102,12 @@ func (e *Engine) Run(ctx context.Context, articles []models.Article, userID uint
 		markdown = templateBriefing(topArticles, keywords)
 	}
 
-	// ⑤ 保存
 	briefing := &models.Briefing{
 		UserID:          userID,
 		Title:           fmt.Sprintf("每日简报 - %s", time.Now().Format("2006-01-02")),
 		ContentMarkdown: markdown,
 		ArticleCount:    len(topArticles),
-		GeneratedAt:     time.Now(),
+		GeneratedAt:     time.Now().UTC(),
 		Status:          "completed",
 	}
 	ba := make([]models.BriefingArticle, len(topArticles))
@@ -114,7 +117,12 @@ func (e *Engine) Run(ctx context.Context, articles []models.Article, userID uint
 			RankPosition: i + 1,
 		}
 	}
-	if err := e.briefingRepo.CreateWithArticles(briefing, ba); err != nil {
+	if placeholderID > 0 {
+		if err := e.briefingRepo.FillPlaceholder(placeholderID, briefing, ba); err != nil {
+			return nil, fmt.Errorf("fill: %w", err)
+		}
+		briefing.ID = placeholderID
+	} else if err := e.briefingRepo.CreateWithArticles(briefing, ba); err != nil {
 		return nil, fmt.Errorf("save: %w", err)
 	}
 
@@ -132,7 +140,6 @@ func (e *Engine) selectTop(articles []models.Article, scored []llm.ScoredArticle
 	for _, s := range scored {
 		scoreMap[s.ID] = s.Score
 	}
-
 	var ws []idxScore
 	for i, a := range articles {
 		s, ok := scoreMap[a.ID]
@@ -142,7 +149,6 @@ func (e *Engine) selectTop(articles []models.Article, scored []llm.ScoredArticle
 		articles[i].RelevanceScore = s
 		ws = append(ws, idxScore{idx: i, score: s})
 	}
-
 	for i := 0; i < len(ws); i++ {
 		for j := i + 1; j < len(ws); j++ {
 			if ws[j].score > ws[i].score {
@@ -150,7 +156,6 @@ func (e *Engine) selectTop(articles []models.Article, scored []llm.ScoredArticle
 			}
 		}
 	}
-
 	if maxN > len(articles) {
 		maxN = len(articles)
 	}
@@ -160,8 +165,6 @@ func (e *Engine) selectTop(articles []models.Article, scored []llm.ScoredArticle
 	}
 	return result
 }
-
-// === helpers ===
 
 type rankInput struct {
 	ID    uint   `json:"id"`

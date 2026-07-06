@@ -3,6 +3,7 @@ package main
 import (
 	"log/slog"
 	"os"
+	"time"
 
 	v1 "loledgeagent/api/v1"
 	"loledgeagent/internal/config"
@@ -37,10 +38,16 @@ func main() {
 		&models.MemoryEmbedding{},
 	)
 
-	// 旧版 admin 用户无密码，允许后续注册覆盖
 	// （注册时：存在但无密码 → 设置密码；不存在 → 新建）
 
-	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
+	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
+		ReplaceAttr: func(groups []string, a slog.Attr) slog.Attr {
+			if a.Key == slog.TimeKey {
+				a.Value = slog.StringValue(time.Now().Format("2006-01-02 15:04:05"))
+			}
+			return a
+		},
+	}))// 记录日志到 stdout，格式为 JSON，时间格式为 "2006-01-02 15:04:05"
 	logger.Info("database initialized", "path", cfg.Database.Path)
 
 	r := gin.New()

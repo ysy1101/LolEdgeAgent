@@ -42,7 +42,7 @@ export default function BriefingDetail() {
         <div>
           <h1 className="text-xl font-semibold text-gray-900">{briefing.title}</h1>
           <p className="text-xs text-gray-500 mt-0.5">
-            {briefing.generated_at} · {briefing.article_count} 篇文章 · <StatusBadge status={briefing.status} />
+            {briefing.generated_at?.replace('T',' ').slice(0,19)} · {briefing.article_count} 篇文章 · <StatusBadge status={briefing.status} />
           </p>
         </div>
       </div>

@@ -7,15 +7,19 @@ import { Plus, Trash2, RefreshCw } from 'lucide-react';
 
 export default function BriefingList() {
   const [briefings, setBriefings] = useState<Briefing[]>([]);
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
+  const pageSize = 5;
   const [generating, setGenerating] = useState(false);
   const navigate = useNavigate();
 
   const load = useCallback(async () => {
     try {
-      const r = await api.briefings.list(1, 50);
+      const r = await api.briefings.list(page, pageSize);
       setBriefings(r.items);
+      setTotal(r.total);
     } catch { /* */ }
-  }, []);
+  }, [page]);
   useEffect(() => { load(); }, [load]);
 
   // 如果存在正在生成的简报，每 5 秒轮询
@@ -30,7 +34,7 @@ export default function BriefingList() {
     e.stopPropagation();
     if (!confirm('确定删除此简报？')) return;
     await api.briefings.delete(id);
-    load();
+    setPage(1); load();
   };
 
   const handleRetry = async (e: React.MouseEvent) => {
@@ -39,7 +43,7 @@ export default function BriefingList() {
     setGenerating(true);
     try {
       await api.briefings.generate();
-      await load();
+      setPage(1); await load();
     } catch (err: any) {
       alert('重试失败: ' + err.message);
     } finally {
@@ -102,7 +106,7 @@ export default function BriefingList() {
                   <p className="mt-1 text-xs text-red-600">{b.error_message}</p>
                 ) : (
                   <p className="mt-1 text-xs text-gray-500">
-                    {b.generated_at} · {b.article_count} 篇文章
+                    {fmtTime(b.generated_at)} · {b.article_count} 篇文章
                   </p>
                 )}
               </div>
@@ -125,9 +129,31 @@ export default function BriefingList() {
           ))}
         </div>
       )}
+
+      {/* 分页 */}
+      {total > pageSize && (
+        <div className="mt-4 flex items-center justify-center gap-2">
+          <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}
+            className="rounded px-2 py-1 text-xs text-gray-600 hover:bg-gray-100 disabled:opacity-30">
+            上一页
+          </button>
+          <span className="text-xs text-gray-500">{page} / {Math.ceil(total / pageSize)}</span>
+          <button onClick={() => setPage(p => p + 1)} disabled={page * pageSize >= total}
+            className="rounded px-2 py-1 text-xs text-gray-600 hover:bg-gray-100 disabled:opacity-30">
+            下一页
+          </button>
+          <input
+            type="number" min={1} max={Math.ceil(total / pageSize)}
+            className="w-10 rounded border border-gray-200 px-1 py-0.5 text-xs text-center"
+            onKeyDown={e => { if (e.key === 'Enter') { const v = parseInt((e.target as HTMLInputElement).value); if (v >= 1 && v <= Math.ceil(total / pageSize)) setPage(v); } }}
+          />
+        </div>
+      )}
     </div>
   );
 }
+
+function fmtTime(t: string) { return t?.replace('T', ' ').slice(0, 19) || ''; }
 
 function StatusBadge({ status }: { status: string }) {
   const label = { pending: '待处理', generating: '生成中', completed: '已完成', failed: '失败' }[status] || status;

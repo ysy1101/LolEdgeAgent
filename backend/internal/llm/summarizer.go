@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"strings"
+	"sync"
 )
 
 // SummarizeArticle 对单篇文章生成 1-3 句摘要
@@ -23,7 +24,7 @@ func AssembleBriefing(ctx context.Context, c *Client, articlesJSON, interests st
 要求：
 1. 开头概述今日热点（中文）
 2. 按重要程度分成 2-3 个 ## 分类版块
-3. 每篇文章：标题（带原文链接）、一句话摘要、来源标签
+3. 每篇文章：标题（带原文链接）、一句话摘要、来源标签、相关性评分（0~1）
 4. 结尾标注收录文章数
 
 直接输出 Markdown，不要额外说明。`
@@ -32,18 +33,35 @@ func AssembleBriefing(ctx context.Context, c *Client, articlesJSON, interests st
 	return c.Chat(ctx, sys, user)
 }
 
-// SummarizeBatch 批量生成文章摘要（顺序执行）
+// SummarizeBatch 批量生成文章摘要（并发 + 缓存 + 限流）
 func SummarizeBatch(ctx context.Context, c *Client, articles []SummaryInput, logger *slog.Logger) []string {
 	results := make([]string, len(articles))
-	for i, a := range articles {
-		summary, err := SummarizeArticle(ctx, c, a.Title, a.Content)
-		if err != nil {
-			logger.Warn("summarize article failed", "title", a.Title, "error", err)
-			results[i] = a.Description // fallback
-		} else {
-			results[i] = strings.TrimSpace(summary)
+	var wg sync.WaitGroup
+	sem := make(chan struct{}, 3) // 最多 3 个并发，防 API 限流
+
+	for i := range articles {
+		// 缓存命中：已有摘要或描述足够短
+		if len(articles[i].Description) > 50 && len(articles[i].Description) < 500 {
+			results[i] = articles[i].Description
+			continue
 		}
+
+		wg.Add(1)
+		go func(idx int, a SummaryInput) {
+			defer wg.Done()
+			sem <- struct{}{}
+			defer func() { <-sem }()
+
+			summary, err := SummarizeArticle(ctx, c, a.Title, a.Content)
+			if err != nil {
+				logger.Warn("summarize article failed", "title", a.Title, "error", err)
+				results[idx] = a.Description
+			} else {
+				results[idx] = strings.TrimSpace(summary)
+			}
+		}(i, articles[i])
 	}
+	wg.Wait()
 	return results
 }
 
