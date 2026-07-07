@@ -1,0 +1,674 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LolEdgeAgent 架构图</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'Inter', -apple-system, sans-serif;
+    background: #f5f5f0;
+    color: #1a1a1a;
+    min-height: 100vh;
+    overflow-x: hidden;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+
+  body::before {
+    content: '';
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background:
+      radial-gradient(ellipse 80% 60% at 50% 0%, rgba(200, 170, 110, 0.05), transparent),
+      radial-gradient(ellipse 60% 50% at 20% 80%, rgba(90, 158, 255, 0.03), transparent);
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .container {
+    position: relative;
+    z-index: 1;
+    max-width: 1280px;
+    width: 100%;
+    padding: 12px 18px 20px;
+  }
+
+  .header {
+    text-align: center;
+    margin-bottom: 12px;
+  }
+
+  .header h1 {
+    font-size: 2.2rem;
+    font-weight: 800;
+    color: #1a1a1a;
+    letter-spacing: -0.02em;
+    margin-bottom: 8px;
+  }
+
+  .header .subtitle {
+    font-size: 1rem;
+    color: #666;
+    font-weight: 400;
+    letter-spacing: 0.3em;
+    text-transform: uppercase;
+  }
+
+  .header .tagline {
+    font-size: 0.95rem;
+    color: #999;
+    margin-top: 6px;
+  }
+
+  .legend {
+    display: flex;
+    justify-content: center;
+    gap: 8px;
+    margin-bottom: 10px;
+    flex-wrap: wrap;
+  }
+
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.95rem;
+    color: #999;
+  }
+
+  .legend-dot {
+    width: 12px; height: 12px;
+    border-radius: 4px;
+  }
+
+  .arch-row {
+    display: flex;
+    gap: 6px;
+    margin-bottom: 1px;
+    justify-content: center;
+  }
+
+  .layer-label {
+    writing-mode: vertical-lr;
+    text-orientation: mixed;
+    transform: rotate(180deg);
+    font-size: 0.8rem;
+    font-weight: 600;
+    letter-spacing: 0.15em;
+    color: #999;
+    text-transform: uppercase;
+    padding: 0 4px;
+    min-width: 18px;
+    text-align: center;
+  }
+
+  .arch-card {
+    background: #ffffff;
+    border: 1px solid #e0dcd4;
+    border-radius: 10px;
+    padding: 6px 10px;
+    min-width: 80px;
+    flex: 1;
+    transition: all 0.25s ease;
+    position: relative;
+    cursor: default;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.04);
+  }
+
+  .arch-card:hover {
+    border-color: #c8aa6e;
+    background: #fefcf8;
+    transform: translateY(-2px);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+  }
+
+  .arch-card .card-title {
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: #1a1a1a;
+    margin-bottom: 1px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .arch-card .card-title .icon { font-size: 1rem; }
+  .arch-card .card-body { font-size: 0.72rem; color: #666; line-height: 1.4; }
+  .arch-card .card-body .highlight { color: #c8aa6e; }
+  .arch-card .card-body .tech { color: #1a73e8; }
+
+  .arch-card.compact { padding: 4px 8px; min-width: 70px; }
+  .arch-card.compact .card-title { font-size: 0.95rem; }
+  .arch-card.compact .card-body { font-size: 0.68rem; }
+
+  .arch-card.pipeline { border-left: 3px solid #5a9eff; }
+  .arch-card.service { border-left: 3px solid #c8aa6e; }
+  .arch-card.frontend { border-left: 3px solid #e85656; }
+  .arch-card.data { border-left: 3px solid #2aa89e; }
+  .arch-card.infra { border-left: 3px solid #8b6fd6; }
+  .arch-card.agent { border-left: 3px solid #d98c0a; }
+  .arch-card.source { border-left: 3px solid #28a068; }
+
+  .section-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin: 12px 0 4px;
+    padding-top: 8px;
+    border-top: 1px solid #e0dcd4;
+  }
+
+  .section-header .label {
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: #666;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+  }
+
+  .section-header .line {
+    flex: 1;
+    height: 1px;
+    background: linear-gradient(90deg, #ddd8d0, transparent);
+  }
+
+  .badge-group {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-top: 6px;
+    margin-bottom: 4px;
+  }
+
+  .badge {
+    font-size: 0.65rem;
+    padding: 1px 6px;
+    padding: 2px 8px;
+    border-radius: 100px;
+    background: #f0ede8;
+    color: #777;
+    border: 1px solid #e0dcd4;
+  }
+
+  .badge.llm { background: #e8f0fe; color: #1a73e8; border-color: #c6dafc; }
+  .badge.go { background: #e0f2fe; color: #0284c7; border-color: #b9e6fe; }
+  .badge.ts { background: #e8edf9; color: #3178c6; border-color: #c5d4ed; }
+  .badge.rust { background: rgba(255, 133, 0, 0.12); color: #ff8500; }
+  .badge.js { background: #fef9c3; color: #a16207; border-color: #fde68a; }
+
+  .arch-card .tooltip {
+    display: none;
+    position: absolute;
+    bottom: calc(100% + 12px);
+    left: 50%;
+    transform: translateX(-50%);
+    background: #ffffff;
+    border: 1px solid #d0c8b8;
+    border-radius: 8px;
+    padding: 12px 16px;
+    font-size: 0.95rem;
+    color: #bbb;
+    width: 220px;
+    text-align: left;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.12);
+    z-index: 10;
+    line-height: 1.5;
+  }
+
+  .arch-card:hover .tooltip { display: block; }
+
+  .tooltip::after {
+    content: '';
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    border: 6px solid transparent;
+    border-top-color: #d0c8b8;
+  }
+
+  .tooltip strong { color: #1a1a1a; display: block; margin-bottom: 4px; }
+
+  .pipeline-bar {
+    display: flex;
+    align-items: stretch;
+    gap: 0;
+    background: #ffffff;
+    border: 1px solid #e0dcd4;
+    border-radius: 10px;
+    overflow: hidden;
+    width: 100%;
+  }
+
+  .pipeline-step {
+    flex: 1;
+    padding: 6px 8px;
+    text-align: center;
+    position: relative;
+    transition: all 0.25s ease;
+    border-right: 1px solid #ece8e0;
+  }
+
+  .pipeline-step:last-child { border-right: none; }
+
+  .pipeline-step:hover {
+    background: #faf8f5;
+  }
+
+  .pipeline-step .step-icon { font-size: 1.2rem; margin-bottom: 1px; }
+  .pipeline-step .step-name { font-size: 0.78rem; font-weight: 600; color: #333; margin-bottom: 1px; }
+  .pipeline-step .step-desc { font-size: 0.68rem; color: #888; }
+  .pipeline-step .step-tech { font-size: 0.6rem; color: #aaa; margin-top: 1px; }
+
+  .pipeline-step::after {
+    content: '\2192';
+    position: absolute;
+    right: -10px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: #ccc;
+    font-size: 1rem;
+    z-index: 2;
+  }
+
+  .pipeline-step:last-child::after { display: none; }
+
+  .particle {
+    position: fixed;
+    width: 3px;
+    height: 3px;
+    background: #c8aa6e;
+    border-radius: 50%;
+    pointer-events: none;
+    animation: float 18s infinite ease-in-out;
+  }
+
+  @keyframes float {
+    0% { transform: translateY(100vh) scale(0); opacity: 0; }
+    10% { opacity: 1; }
+    90% { opacity: 1; }
+    100% { transform: translateY(-10vh) scale(1); opacity: 0; }
+  }
+
+  .footer {
+    text-align: center;
+    margin-top: 12px;
+    font-size: 0.8rem;
+    color: #444;
+  }
+
+  .footer span { color: #b8962a; }
+
+  @media (max-width: 860px) {
+    .container { padding: 24px 16px 40px; }
+    .header h1 { font-size: 1.6rem; }
+    .arch-row { flex-wrap: wrap; }
+    .arch-card { min-width: 120px; }
+    .legend { gap: 16px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="container">
+
+  <div class="header">
+    <h1>LolEdgeAgent</h1>
+    <div class="subtitle">Architecture &middot; 系统架构</div>
+    <div class="tagline">基于 Go + React 的智能内容聚合与简报平台</div>
+  </div>
+
+  <div class="legend">
+    <div class="legend-item"><div class="legend-dot" style="background:#5a9eff"></div> 管线 &amp; 中间层</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#c8aa6e"></div> 业务服务</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#ff6b6b"></div> 前端展示</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#4ecdc4"></div> 数据层</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#34d399"></div> 采集源</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#f59e0b"></div> Agent / LLM</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#a78bfa"></div> 基础设施</div>
+  </div>
+
+  <!-- ===== DATA SOURCES ===== -->
+  <div class="section-header">
+    <span class="label">数据采集层</span>
+    <span class="line"></span>
+    <span style="font-size:0.6rem;color:#28a068">Source Ingestion</span>
+  </div>
+
+  <div class="arch-row">
+    <div class="arch-card source">
+      <div class="card-title"><span class="icon">📡</span> RSS Feed</div>
+      <div class="card-body"><span class="tech">gofeed</span> 解析标准 RSS/Atom<br>多新闻源订阅</div>
+      <div class="tooltip"><strong>RSS Feed</strong>基于 gofeed 库实现通用 RSS/Atom 内容抓取，支持任意标准 Feed 源。</div>
+    </div>
+    <div class="arch-card source">
+      <div class="card-title"><span class="icon">🐙</span> GitHub Trending</div>
+      <div class="card-body"><span class="tech">goquery</span> HTML 解析<br>爬取 GitHub 趋势仓库</div>
+      <div class="tooltip"><strong>GitHub Trending</strong>通过 goquery 选择器解析 GitHub Trending 页面，提取仓库元数据。</div>
+    </div>
+    <div class="arch-card source">
+      <div class="card-title"><span class="icon">🔥</span> Hacker News</div>
+      <div class="card-body"><span class="tech">Firebase API</span> 实时调用<br>获取 HN 热门内容</div>
+      <div class="tooltip"><strong>Hacker News</strong>通过 Firebase 官方 API 获取实时热门帖子与评论数据。</div>
+    </div>
+  </div>
+
+  <div class="badge-group" style="justify-content:center;gap:6px">
+    <span class="badge go">Go</span>
+    <span class="badge">gofeed</span>
+    <span class="badge">goquery</span>
+    <span class="badge">REST API</span>
+  </div>
+
+  <!-- ===== PIPELINE ===== -->
+  <div class="section-header" style="margin-top:36px">
+    <span class="label">核心管线</span>
+    <span class="line"></span>
+    <span style="font-size:0.6rem;color:#5a9eff">Pipeline Engine</span>
+  </div>
+
+  <div class="pipeline-bar">
+    <div class="pipeline-step">
+      <div class="step-icon">📥</div>
+      <div class="step-name">采集</div>
+      <div class="step-desc">FetchService 调度源<br>抓取原始内容</div>
+      <div class="step-tech">repository + gofeed</div>
+    </div>
+    <div class="pipeline-step">
+      <div class="step-icon">🧹</div>
+      <div class="step-name">去重</div>
+      <div class="step-desc">SHA256 内容哈希<br>DB 级重复检测</div>
+      <div class="step-tech">FetchLog + Dedup</div>
+    </div>
+    <div class="pipeline-step">
+      <div class="step-icon">🏆</div>
+      <div class="step-name">排序</div>
+      <div class="step-desc">LLM 智能排名<br>按兴趣 &amp; 时效</div>
+      <div class="step-tech">LLM Chat + Preference</div>
+    </div>
+    <div class="pipeline-step">
+      <div class="step-icon">📝</div>
+      <div class="step-name">摘要</div>
+      <div class="step-desc">LLM 生成摘要<br>提取核心要点</div>
+      <div class="step-tech">LLM Chat + Prompt</div>
+    </div>
+    <div class="pipeline-step">
+      <div class="step-icon">📋</div>
+      <div class="step-name">组装</div>
+      <div class="step-desc">编排为 Markdown<br>写入 Briefing DB</div>
+      <div class="step-tech">Engine Run</div>
+    </div>
+  </div>
+
+  <!-- ===== BACKEND SERVICES ===== -->
+  <div class="section-header" style="margin-top:36px">
+    <span class="label">后端服务层</span>
+    <span class="line"></span>
+    <span style="font-size:0.6rem;color:#b8962a">Backend / Services</span>
+  </div>
+
+  <div class="arch-row">
+    <div class="arch-card service compact">
+      <div class="card-title"><span class="icon">🔐</span> Auth</div>
+      <div class="card-body"><span class="tech">JWT</span> + bcrypt<br>注册 / 登录 / 验证</div>
+    </div>
+    <div class="arch-card service compact">
+      <div class="card-title"><span class="icon">📰</span> Article</div>
+      <div class="card-body"><span class="tech">CRUD</span> + 分页<br>文章列表与日期索引</div>
+    </div>
+    <div class="arch-card service compact">
+      <div class="card-title"><span class="icon">📊</span> Briefing</div>
+      <div class="card-body"><span class="tech">生成 / 查询 / 删除</span><br>管线编排 + 调度</div>
+    </div>
+    <div class="arch-card service compact">
+      <div class="card-title"><span class="icon">💬</span> Conversation</div>
+      <div class="card-body"><span class="tech">多轮对话</span><br>消息存储与切换</div>
+    </div>
+    <div class="arch-card service compact">
+      <div class="card-title"><span class="icon">⚙️</span> Preference</div>
+      <div class="card-body"><span class="tech">用户偏好</span><br>LLM 密钥 / 简报配置</div>
+    </div>
+    <div class="arch-card service compact">
+      <div class="card-title"><span class="icon">📡</span> Source</div>
+      <div class="card-body"><span class="tech">源管理</span><br>CRUD + 手动抓取</div>
+    </div>
+  </div>
+
+  <div class="arch-row">
+    <div class="arch-card service compact">
+      <div class="card-title"><span class="icon">🧠</span> RAG</div>
+      <div class="card-body"><span class="tech">Embedding</span> + 向量搜索<br>语义检索 + LLM 问答</div>
+    </div>
+    <div class="arch-card service compact">
+      <div class="card-title"><span class="icon">🔄</span> Scheduler</div>
+      <div class="card-body"><span class="tech">robfig/cron</span><br>定时简报生成任务</div>
+    </div>
+    <div class="arch-card service compact">
+      <div class="card-title"><span class="icon">💾</span> Memory</div>
+      <div class="card-body"><span class="tech">Agent 记忆系统</span><br>持久化 + 向量检索</div>
+    </div>
+    <div class="arch-card service compact">
+      <div class="card-title"><span class="icon">🛡️</span> Middleware</div>
+      <div class="card-body"><span class="tech">CORS</span> + <span class="tech">JWT Auth</span><br>请求拦截与鉴权</div>
+    </div>
+  </div>
+
+  <div class="badge-group" style="justify-content:center;gap:6px;margin-top:4px">
+    <span class="badge go">Go</span>
+    <span class="badge">Gin</span>
+    <span class="badge">GORM</span>
+    <span class="badge">JWT</span>
+    <span class="badge">robfig/cron</span>
+  </div>
+
+  <!-- ===== AGENT + LLM ===== -->
+  <div class="section-header" style="margin-top:36px">
+    <span class="label">Agent &amp; LLM 层</span>
+    <span class="line"></span>
+    <span style="font-size:0.6rem;color:#d98c0a">Intelligence</span>
+  </div>
+
+  <div class="arch-row">
+    <div class="arch-card agent">
+      <div class="card-title"><span class="icon">🤖</span> Agent 引擎</div>
+      <div class="card-body">
+        System Prompt（角色 + 工具声明）<br>
+        工具系统：<span class="highlight">5 Tools</span>（搜索 / 简报 / RAG 等）<br>
+        记忆系统：会话持久 + 上下文截断保护
+      </div>
+      <div class="tooltip"><strong>Agent 引擎</strong>自主决策 + 多轮对话。包含系统提示工程、工具注册/调用、记忆管理、上下文窗口保护。</div>
+    </div>
+    <div class="arch-card agent">
+      <div class="card-title"><span class="icon">🔌</span> LLM Client</div>
+      <div class="card-body">
+        <span class="tech">OpenAI 兼容</span> HTTP 客户端<br>
+        支持 <span class="highlight">DeepSeek</span> / <span class="highlight">Qwen</span> 等<br>
+        Embedding API + 余弦相似度
+      </div>
+      <div class="tooltip"><strong>LLM Client</strong>基于 OpenAI 兼容协议，支持切换模型/API Key/BaseURL。用于管线排序、摘要、Agent 对话、RAG 问答。</div>
+    </div>
+    <div class="arch-card agent">
+      <div class="card-title"><span class="icon">🧩</span> LLM 管线集成</div>
+      <div class="card-body">
+        文章智能排名<br>
+        自动摘要生成<br>
+        RAG 语义搜索 + 生成
+      </div>
+      <div class="tooltip"><strong>管线集成</strong>管线的排序和摘要步骤依赖 LLM 调用；RAG 使用 Embedding 做向量检索并拼接上下文让 LLM 回答。</div>
+    </div>
+  </div>
+
+  <div class="badge-group" style="justify-content:center;gap:6px;margin-top:4px">
+    <span class="badge go">Go</span>
+    <span class="badge llm">OpenAI Compatible</span>
+    <span class="badge">DeepSeek</span>
+    <span class="badge">Qwen</span>
+  </div>
+
+  <!-- ===== DATABASE ===== -->
+  <div class="section-header" style="margin-top:36px">
+    <span class="label">数据存储层</span>
+    <span class="line"></span>
+    <span style="font-size:0.6rem;color:#2aa89e">Storage</span>
+  </div>
+
+  <div class="arch-row">
+    <div class="arch-card data">
+      <div class="card-title"><span class="icon">🗄️</span> SQLite</div>
+      <div class="card-body">
+        <span class="tech">GORM</span> 自动迁移<br>
+        <span class="highlight">13 张表</span> 覆盖全业务域
+      </div>
+    </div>
+    <div class="arch-card data">
+      <div class="card-title"><span class="icon">📊</span> 向量存储</div>
+      <div class="card-body">
+        Embedding + 余弦相似度<br>
+        文章 / 记忆双向量索引
+      </div>
+    </div>
+  </div>
+
+  <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(70px,1fr));gap:1px;margin:2px 8px 0">
+    <div style="font-size:0.6rem;color:#999;text-align:center"><span style="color:#555">User</span> · Source · Article · Briefing</div>
+    <div style="font-size:0.6rem;color:#999;text-align:center"><span style="color:#555">BriefingArticle</span> · Bookmark · Preference</div>
+    <div style="font-size:0.6rem;color:#999;text-align:center"><span style="color:#555">FetchLog</span> · ArticleEmbedding</div>
+    <div style="font-size:0.6rem;color:#999;text-align:center"><span style="color:#555">Conversation</span> · ChatMessage · Memory · MemoryEmbedding</div>
+  </div>
+
+  <!-- ===== FRONTEND ===== -->
+  <div class="section-header" style="margin-top:36px">
+    <span class="label">前端展示层</span>
+    <span class="line"></span>
+    <span style="font-size:0.6rem;color:#e85656">Frontend</span>
+  </div>
+
+  <div class="arch-row">
+    <div class="arch-card frontend compact">
+      <div class="card-title"><span class="icon">💬</span> Chat</div>
+      <div class="card-body">Agent 对话界面<br>多轮交互 + 上下文</div>
+    </div>
+    <div class="arch-card frontend compact">
+      <div class="card-title"><span class="icon">📋</span> Briefings</div>
+      <div class="card-body">简报列表 / 详情<br>Markdown 渲染</div>
+    </div>
+    <div class="arch-card frontend compact">
+      <div class="card-title"><span class="icon">📰</span> Articles</div>
+      <div class="card-body">文章列表与搜索<br>按日期索引浏览</div>
+    </div>
+    <div class="arch-card frontend compact">
+      <div class="card-title"><span class="icon">📡</span> Sources</div>
+      <div class="card-body">内容源管理<br>CRUD + 手动触发</div>
+    </div>
+    <div class="arch-card frontend compact">
+      <div class="card-title"><span class="icon">⚙️</span> Preferences</div>
+      <div class="card-body">偏好配置<br>LLM / 简报 / 调度</div>
+    </div>
+    <div class="arch-card frontend compact">
+      <div class="card-title"><span class="icon">🔑</span> Login</div>
+      <div class="card-body">JWT 注册登录<br>token 持久化</div>
+    </div>
+  </div>
+
+  <div class="badge-group" style="justify-content:center;gap:6px;margin-top:4px">
+    <span class="badge ts">TypeScript</span>
+    <span class="badge js">React 19</span>
+    <span class="badge">Tailwind CSS 4</span>
+    <span class="badge">react-router v7</span>
+    <span class="badge">lucide-react</span>
+    <span class="badge">Vite</span>
+  </div>
+
+  <!-- ===== INFRASTRUCTURE ===== -->
+  <div class="section-header" style="margin-top:36px">
+    <span class="label">基础设施层</span>
+    <span class="line"></span>
+    <span style="font-size:0.6rem;color:#8b6fd6">Infrastructure</span>
+  </div>
+
+  <div class="arch-row">
+    <div class="arch-card infra compact">
+      <div class="card-title"><span class="icon">🐳</span> Docker</div>
+      <div class="card-body">docker-compose<br>后端 :8080 + 前端 :3000</div>
+    </div>
+    <div class="arch-card infra compact">
+      <div class="card-title"><span class="icon">🏗️</span> Nginx</div>
+      <div class="card-body">前端反向代理<br>API 转发配置</div>
+    </div>
+    <div class="arch-card infra compact">
+      <div class="card-title"><span class="icon">📄</span> 配置管理</div>
+      <div class="card-body">config.yaml<br>环境变量覆盖</div>
+    </div>
+    <div class="arch-card infra compact">
+      <div class="card-title"><span class="icon">📝</span> 日志</div>
+      <div class="card-body">slog JSON Handler<br>结构化日志输出</div>
+    </div>
+  </div>
+
+  <!-- ===== REQUEST FLOW ===== -->
+  <div class="section-header" style="margin-top:36px">
+    <span class="label">请求数据流</span>
+    <span class="line"></span>
+    <span style="font-size:0.6rem;color:#b8962a">Request Flow</span>
+  </div>
+
+  <div style="background:#ffffff;border:1px solid #e0dcd4;border-radius:14px;padding:8px 12px;box-shadow:0 1px 4px rgba(0,0,0,0.04)">
+    <div style="display:flex;align-items:center;justify-content:center;flex-wrap:wrap;gap:10px;font-size:0.85rem">
+      <span style="background:rgba(255,107,107,0.1);padding:6px 14px;border-radius:8px;border:1px solid rgba(255,107,107,0.15);color:#e85656;font-weight:600">🌐 Browser</span>
+      <span style="color:#4a4a6a;font-size:1.1rem">&rarr;</span>
+      <span style="background:rgba(167,139,250,0.1);padding:6px 14px;border-radius:8px;border:1px solid rgba(167,139,250,0.15);color:#8b6fd6;font-weight:600">🐳 Nginx</span>
+      <span style="color:#4a4a6a;font-size:1.1rem">&rarr;</span>
+      <span style="background:#eff6ff;padding:6px 14px;border-radius:8px;border:1px solid #bfdbfe;color:#2563eb;font-weight:600">⚡ Gin Router</span>
+      <span style="color:#4a4a6a;font-size:1.1rem">&rarr;</span>
+      <span style="background:#f8f8f5;padding:6px 14px;border-radius:8px;border:1px solid #e0dcd4;color:#666;font-weight:500">🛡️ Middleware</span>
+      <span style="color:#4a4a6a;font-size:1.1rem">&rarr;</span>
+      <span style="background:rgba(200,170,110,0.1);padding:6px 14px;border-radius:8px;border:1px solid rgba(200,170,110,0.15);color:#b8962a;font-weight:600">🎯 Handler</span>
+      <span style="color:#4a4a6a;font-size:1.1rem">&rarr;</span>
+      <span style="background:rgba(78,205,196,0.1);padding:6px 14px;border-radius:8px;border:1px solid rgba(78,205,196,0.15);color:#2aa89e;font-weight:600">🗄️ Service/Repo</span>
+    </div>
+
+    <div style="margin-top:14px;display:flex;align-items:center;justify-content:center;gap:8px;font-size:0.72rem;color:#4a4a6a">
+      <span style="border-top:1px solid #ddd8d0;flex:1;max-width:100px"></span>
+      <span>Agent 对话分支</span>
+      <span style="border-top:1px solid #ddd8d0;flex:1;max-width:100px"></span>
+    </div>
+
+    <div style="display:flex;align-items:center;justify-content:center;flex-wrap:wrap;gap:10px;font-size:0.85rem;margin-top:8px">
+      <span style="background:#f8f8f5;padding:6px 14px;border-radius:8px;border:1px solid #e0dcd4;color:#666;font-weight:500">🤖 Agent Engine</span>
+      <span style="color:#4a4a6a;font-size:1.1rem">&rarr;</span>
+      <span style="background:rgba(245,158,11,0.1);padding:6px 14px;border-radius:8px;border:1px solid rgba(245,158,11,0.15);color:#d98c0a;font-weight:600">🔧 Tools</span>
+      <span style="color:#4a4a6a;font-size:1.1rem">&rarr;</span>
+      <span style="background:#eff6ff;padding:6px 14px;border-radius:8px;border:1px solid #bfdbfe;color:#2563eb;font-weight:600">🔌 LLM Client</span>
+      <span style="color:#4a4a6a;font-size:1.1rem">&rarr;</span>
+      <span style="background:rgba(200,170,110,0.1);padding:6px 14px;border-radius:8px;border:1px solid rgba(200,170,110,0.15);color:#b8962a;font-weight:600">🎯 Handler</span>
+      <span style="color:#4a4a6a;font-size:1.1rem">&rarr;</span>
+      <span style="background:rgba(255,107,107,0.1);padding:6px 14px;border-radius:8px;border:1px solid rgba(255,107,107,0.15);color:#e85656;font-weight:600">🌐 Browser</span>
+    </div>
+  </div>
+
+  <div class="footer">
+    LolEdgeAgent &middot; <span>Content Aggregation &amp; Briefing Agent</span> &middot; Go + React + LLM
+  </div>
+
+</div>
+
+<script>
+  for (let i = 0; i < 20; i++) {
+    const p = document.createElement('div');
+    p.className = 'particle';
+    p.style.left = Math.random() * 100 + '%';
+    p.style.animationDelay = Math.random() * 15 + 's';
+    p.style.animationDuration = (12 + Math.random() * 18) + 's';
+    p.style.width = p.style.height = (1 + Math.random() * 2) + 'px';
+    document.body.appendChild(p);
+  }
+</script>
+
+</body>
+</html>
