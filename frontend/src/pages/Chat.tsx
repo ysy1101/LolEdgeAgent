@@ -95,22 +95,66 @@ export default function Chat() {
     }));
 
     try {
-      const res = await fetch('/api/v1/agent/chat', {
-        method: 'POST', headers: headers(),
+      // SSE 流式请求
+      const tokenStr = token();
+      const streamRes = await fetch('/api/v1/agent/chat/stream', {
+        method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${tokenStr}` },
         body: JSON.stringify({ message: q, history }),
       });
-      const json = await res.json();
-      const answer = json.data?.content || '回答失败';
-      const steps: Step[] = json.data?.steps || [];
 
-      // 4. 助手回复落 DB
+      const reader = streamRes.body?.getReader();
+      const decoder = new TextDecoder();
+      let answer = '';
+      const steps: Step[] = [];
+      let buf = '';
+
+      // 先插入空的 assistant 消息占位
+      setMessages(prev => [...prev, { role: 'assistant', content: '', steps }]);
+
+      while (reader) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buf += decoder.decode(value, { stream: true });
+        const lines = buf.split('\n');
+        buf = lines.pop() || '';
+
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue;
+          try {
+            const evt = JSON.parse(line.slice(6));
+            if (evt.type === 'tool_call' || evt.type === 'tool') {
+              steps.push({ round: steps.length + 1, role: evt.type, content: evt.content, tool: evt.tool });
+              setMessages(prev => {
+                const next = [...prev];
+                next[next.length - 1] = { ...next[next.length - 1], steps: [...steps] };
+                return next;
+              });
+            } else if (evt.type === 'text') {
+              answer += evt.content;
+              setMessages(prev => {
+                const next = [...prev];
+                next[next.length - 1] = { ...next[next.length - 1], content: answer, steps: [...steps] };
+                return next;
+              });
+            } else if (evt.type === 'error') {
+              answer = '请求失败: ' + evt.content;
+              setMessages(prev => {
+                const next = [...prev];
+                next[next.length - 1] = { ...next[next.length - 1], content: answer, steps: [...steps] };
+                return next;
+              });
+            }
+          } catch { /* skip malformed lines */ }
+        }
+      }
+
+      if (!answer) answer = '回答失败';
+
+      // 保存 AI 回复
       await fetch(`/api/v1/conversations/${convId}/messages`, {
         method: 'POST', headers: headers(),
         body: JSON.stringify({ role: 'assistant', content: answer }),
       });
-
-      // 5. UI 追加助手消息
-      setMessages(prev => [...prev, { role: 'assistant', content: answer, steps }]);
     } catch {
       setMessages(prev => [...prev, { role: 'assistant', content: '请求失败' }]);
     } finally {

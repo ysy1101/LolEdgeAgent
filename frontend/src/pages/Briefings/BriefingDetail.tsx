@@ -47,6 +47,19 @@ export default function BriefingDetail() {
         </div>
       </div>
 
+      {briefing.progress && parseTimings(briefing.progress) && (
+        <details className="mb-4">
+          <summary className="text-xs text-gray-500 cursor-pointer hover:text-gray-700">
+            管线耗时
+          </summary>
+          <div className="mt-1 flex gap-3 text-xs text-gray-500">
+            {Object.entries(parseTimings(briefing.progress)!).map(([k,v]) => (
+              <span key={k}>{k}: <b className="text-gray-700">{v as string}</b></span>
+            ))}
+          </div>
+        </details>
+      )}
+
       <div className="prose max-w-none">
         <ReactMarkdown remarkPlugins={[remarkGfm]}>
           {briefing.content_markdown}
@@ -60,4 +73,10 @@ function StatusBadge({ status }: { status: string }) {
   const label = { pending: '待处理', generating: '生成中', completed: '已完成', failed: '失败' }[status] || status;
   const color = status === 'completed' ? 'green' : status === 'failed' ? 'red' : status === 'generating' ? 'blue' : 'gray';
   return <Badge color={color}>{label}</Badge>;
+}
+
+function parseTimings(progress: string): Record<string,string> | null {
+  const idx = progress.indexOf(':');
+  if (idx < 0) return null;
+  try { return JSON.parse(progress.slice(idx + 1)); } catch { return null; }
 }

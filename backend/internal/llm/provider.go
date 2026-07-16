@@ -106,6 +106,54 @@ func (c *Client) ChatModel() model.ToolCallingChatModel {
 	return c.chatModel
 }
 
+// StreamChat 流式发送消息，返回内容通道
+func (c *Client) StreamChat(ctx context.Context, msgs []ChatMessage) (<-chan string, <-chan error) {
+	contentCh := make(chan string, 10)
+	errCh := make(chan error, 1)
+
+	go func() {
+		defer close(contentCh)
+		defer close(errCh)
+
+		messages := make([]*schema.Message, len(msgs))
+		for i, m := range msgs {
+			switch m.Role {
+			case "system":
+				messages[i] = schema.SystemMessage(m.Content)
+			case "user":
+				messages[i] = schema.UserMessage(m.Content)
+			case "assistant":
+				messages[i] = schema.AssistantMessage(m.Content, nil)
+			default:
+				messages[i] = schema.UserMessage(m.Content)
+			}
+		}
+
+		stream, err := c.chatModel.Stream(ctx, messages)
+		if err != nil {
+			errCh <- err
+			return
+		}
+		defer stream.Close()
+
+		for {
+			chunk, err := stream.Recv()
+			if err != nil {
+				break // io.EOF or stream end
+			}
+			if chunk != nil && chunk.Content != "" {
+				select {
+				case contentCh <- chunk.Content:
+				case <-ctx.Done():
+					return
+				}
+			}
+		}
+	}()
+
+	return contentCh, errCh
+}
+
 // Chat 发送 system + user 消息
 func (c *Client) Chat(ctx context.Context, system, user string) (string, error) {
 	resp, err := c.chatModel.Generate(ctx, []*schema.Message{

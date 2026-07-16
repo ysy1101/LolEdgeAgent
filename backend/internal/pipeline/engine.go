@@ -42,7 +42,7 @@ func (e *Engine) Run(ctx context.Context, articles []models.Article, userID uint
 	return e.run(ctx, articles, userID, 0)
 }
 
-// RunInto 同 Run，但保存到指定占位 ID（不跳号）
+// RunInto 同 Run，但保存到指定占位 ID
 func (e *Engine) RunInto(ctx context.Context, articles []models.Article, userID, placeholderID uint) (*models.Briefing, error) {
 	return e.run(ctx, articles, userID, placeholderID)
 }
@@ -52,6 +52,8 @@ func (e *Engine) run(ctx context.Context, articles []models.Article, userID, pla
 		return nil, fmt.Errorf("no articles")
 	}
 	e.logger.Info("pipeline: start", "articles", len(articles))
+	timings := make(map[string]string)
+	stageStart := time.Now()
 
 	pref, err := e.prefRepo.Get(userID)
 	if err != nil {
@@ -69,6 +71,8 @@ func (e *Engine) run(ctx context.Context, articles []models.Article, userID, pla
 		e.logger.Warn("pipeline: ranking failed", "error", err)
 		scored = defaultRank(articles)
 	}
+	timings["ranking"] = time.Since(stageStart).String()
+	stageStart = time.Now()
 
 	maxN := pref.MaxBriefingArticles
 	if maxN <= 0 {
@@ -92,6 +96,8 @@ func (e *Engine) run(ctx context.Context, articles []models.Article, userID, pla
 			topArticles[i].Summary = s
 		}
 	}
+	timings["summarizing"] = time.Since(stageStart).String()
+	stageStart = time.Now()
 
 	assemblyInput := buildAssemblyInput(topArticles, summaries)
 	assemblyJSON, _ := json.Marshal(assemblyInput)
@@ -101,6 +107,8 @@ func (e *Engine) run(ctx context.Context, articles []models.Article, userID, pla
 		e.logger.Warn("pipeline: assembly failed", "error", err)
 		markdown = templateBriefing(topArticles, keywords)
 	}
+	timings["assembling"] = time.Since(stageStart).String()
+	stageStart = time.Now()
 
 	briefing := &models.Briefing{
 		UserID:          userID,
@@ -125,6 +133,11 @@ func (e *Engine) run(ctx context.Context, articles []models.Article, userID, pla
 	} else if err := e.briefingRepo.CreateWithArticles(briefing, ba); err != nil {
 		return nil, fmt.Errorf("save: %w", err)
 	}
+	timings["saving"] = time.Since(stageStart).String()
+
+	// 存每阶段耗时到 progress
+	tb, _ := json.Marshal(timings)
+	_ = e.briefingRepo.UpdateProgress(briefing.ID, "timings", string(tb))
 
 	e.logger.Info("pipeline: completed", "briefing_id", briefing.ID, "articles", len(topArticles))
 	return briefing, nil

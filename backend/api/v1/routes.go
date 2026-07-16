@@ -116,6 +116,7 @@ func RegisterRoutes(r *gin.Engine, db *gorm.DB, logger *slog.Logger, cfg *config
 
 		agentH := handler.NewAgentHandler(aiAgent)
 		protected.POST("/agent/chat", agentH.Chat)
+		protected.POST("/agent/chat/stream", agentH.ChatStream)
 
 		ragH := handler.NewRAGHandler(ragSvc)
 		protected.POST("/search", ragH.Search)

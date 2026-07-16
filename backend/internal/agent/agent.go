@@ -31,10 +31,17 @@ type Step struct {
 
 // Reply Agent 回复
 type Reply struct {
-	Content    string     `json:"content"`
-	ToolCalled string     `json:"tool_called"`
-	Steps      []Step     `json:"steps,omitempty"`
+	Content    string      `json:"content"`
+	ToolCalled string      `json:"tool_called"`
+	Steps      []Step      `json:"steps,omitempty"`
 	State      *AgentState `json:"state,omitempty"`
+}
+
+// SSEEvent 流式事件
+type SSEEvent struct {
+	Type    string `json:"type"`             // "tool_call" | "tool" | "text" | "done" | "error"
+	Content string `json:"content,omitempty"`
+	Tool    string `json:"tool,omitempty"`
 }
 
 const (
@@ -180,6 +187,88 @@ func (a *Agent) Run(ctx context.Context, history []Message, userMsg string) (*Re
 	}
 
 	return &Reply{Content: "抱歉，处理步骤超限，请简化问题重试。", Steps: steps}, nil
+}
+
+// RunStream 流式执行 Agent，每步工具调用和最终文本通过 write 推送
+func (a *Agent) RunStream(ctx context.Context, history []Message, userMsg string, write func(SSEEvent)) error {
+	tools := allEinoTools()
+	client, err := a.buildClient(ctx)
+	if err != nil {
+		write(SSEEvent{Type: "error", Content: "LLM 未配置"})
+		return err
+	}
+	chatModel := client.ChatModel()
+	toolInfos := buildToolInfos(tools)
+
+	memoryCtx := ""
+	if a.memory != nil {
+		memoryCtx = a.memory.Recall(ctx, getUserID(ctx), userMsg)
+	}
+	msgs := buildMessages(history, userMsg, memoryCtx)
+
+	for round := 1; round <= maxRounds; round++ {
+		msgs = trimContext(msgs)
+		a.logger.Info("agent stream round", "round", round)
+
+		llmCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+		resp, err := chatModel.Generate(llmCtx, msgs, model.WithTools(toolInfos))
+		cancel()
+		if err != nil {
+			write(SSEEvent{Type: "error", Content: err.Error()})
+			return err
+		}
+
+		// 工具调用 → 发事件 + 执行 + 拼回消息
+		if len(resp.ToolCalls) > 0 {
+			for _, tc := range resp.ToolCalls {
+				write(SSEEvent{Type: "tool_call", Content: tc.Function.Name + "(" + tc.Function.Arguments + ")", Tool: tc.Function.Name})
+			}
+			assistantMsg := &schema.Message{Role: resp.Role, Content: resp.Content, ToolCalls: resp.ToolCalls}
+			msgs = append(msgs, assistantMsg)
+			for _, tc := range resp.ToolCalls {
+				result := executeToolCall(ctx, tc.Function.Name, tc.Function.Arguments, tools, a.logger)
+				write(SSEEvent{Type: "tool", Content: truncate(result, 200), Tool: tc.Function.Name})
+				msgs = append(msgs, schema.ToolMessage(result, tc.ID))
+			}
+			continue
+		}
+
+		// 最终回答 → 流式推送文本
+		chunks := splitChunks(resp.Content, 10)
+		for _, c := range chunks {
+			write(SSEEvent{Type: "text", Content: c})
+		}
+		write(SSEEvent{Type: "done"})
+		return nil
+	}
+
+	write(SSEEvent{Type: "error", Content: "处理步骤超限"})
+	return nil
+}
+
+func buildToolInfos(tools []tool.InvokableTool) []*schema.ToolInfo {
+	infos := make([]*schema.ToolInfo, 0, len(tools))
+	for _, t := range tools {
+		info, err := t.Info(context.Background())
+		if err == nil {
+			infos = append(infos, info)
+		}
+	}
+	return infos
+}
+
+// splitChunks 将文本分成 N 个模拟流式块
+func splitChunks(text string, count int) []string {
+	if len(text) <= count {
+		return []string{text}
+	}
+	chunkSize := len(text) / count
+	var chunks []string
+	for i := 0; i < count-1; i++ {
+		chunks = append(chunks, text[i*chunkSize:(i+1)*chunkSize])
+	}
+	chunks = append(chunks, text[(count-1)*chunkSize:])
+	return chunks
 }
 
 // executeToolCall 执行工具调用（传入 ctx 以保留 user_id）
